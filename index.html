@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>大專資源教室 - 學習輔具線上清單</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+</head>
+<body class="bg-[#F9F6F0] text-gray-800 font-sans">
+
+    <div id="app" class="min-h-screen flex flex-col">
+        <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+            <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div class="text-center sm:text-left">
+                    <h1 class="text-xl font-bold tracking-widest text-[#2C4A3E]">OUR OBLIGATION</h1>
+                    <p class="text-xs text-gray-400 tracking-wider mt-0.5">資源教室學習輔具資源網</p>
+                </div>
+                <div class="w-full sm:w-64">
+                    <input type="text" v-model="searchQuery" placeholder="搜尋輔具名稱或關鍵字..." 
+                           class="w-full px-4 py-2 border border-gray-300 rounded-full text-sm focus:outline-none focus:border-[#2C4A3E] bg-[#FDFDFD]">
+                </div>
+            </div>
+        </header>
+
+        <section class="max-w-7xl mx-auto px-4 py-6 w-full">
+            <div class="flex flex-wrap gap-2 justify-center border-b border-gray-200 pb-4">
+                <button @click="currentCategory = '全部'" 
+                        :class="currentCategory === '全部' ? 'bg-[#2C4A3E] text-white' : 'bg-white text-gray-600 hover:bg-gray-100'"
+                        class="px-4 py-2 rounded-full text-xs font-medium tracking-wider transition-all duration-200 shadow-sm border border-gray-100">
+                    ALL. 全部輔具
+                </button>
+                <button v-for="cat in categories" @click="currentCategory = cat"
+                        :class="currentCategory === cat ? 'bg-[#2C4A3E] text-white' : 'bg-white text-gray-600 hover:bg-gray-100'"
+                        class="px-4 py-2 rounded-full text-xs font-medium tracking-wider transition-all duration-200 shadow-sm border border-gray-100">
+                    {{ cat.toUpperCase() }}
+                </button>
+            </div>
+        </section>
+
+        <main class="flex-grow max-w-7xl mx-auto px-4 pb-16 w-full">
+            <div v-if="loading" class="flex flex-col items-center justify-center py-24 gap-3">
+                <div class="w-8 h-8 border-4 border-[#2C4A3E] border-t-transparent rounded-full animate-spin"></div>
+                <p class="text-sm text-gray-400 tracking-widest">正在同步雲端輔具資料...</p>
+            </div>
+
+            <div v-if="!loading && filteredEquipments.length === 0" class="text-center py-24 text-gray-400">
+                沒有找到符合條件的輔具設備。
+            </div>
+
+            <div v-if="!loading" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+                <div v-for="item in filteredEquipments" :key="item.輔具編號" 
+                     class="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 flex flex-col group border border-gray-100">
+                    
+                    <div class="relative bg-gray-100 aspect-square overflow-hidden">
+                        <img :src="item.輔具照片 || 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500'" 
+                             :alt="item.語音說明文字 || item.輔具名稱"
+                             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                        
+                        <span :class="getStatusClass(item.目前狀態)"
+                              class="absolute top-3 right-3 px-2.5 py-1 text-[10px] font-bold tracking-wider rounded-full shadow-sm">
+                            {{ item.目前狀態 }}
+                        </span>
+                    </div>
+
+                    <div class="p-5 flex flex-col flex-grow justify-between">
+                        <div>
+                            <span class="text-[10px] tracking-widest text-gray-400 font-semibold block mb-1 uppercase">{{ item.分類 }}</span>
+                            <h3 class="font-bold text-gray-800 text-base group-hover:text-[#2C4A3E] transition-colors line-clamp-1">{{ item.輔具名稱 }}</h3>
+                            <p class="text-xs text-gray-500 mt-2 line-clamp-2 min-h-[2rem] leading-relaxed">{{ item.功能簡介 }}</p>
+                        </div>
+                        
+                        <div class="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+                            <span class="text-xs text-gray-400">位置：{{ item.保管位置 }}</span>
+                            <button @click="openModal(item)" class="text-xs font-semibold tracking-wider text-[#2C4A3E] hover:underline">
+                                查看詳情 →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <div v-if="selectedItem" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" @click.self="selectedItem = null">
+            <div class="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl animate-fade-in">
+                <div class="relative aspect-video bg-gray-100">
+                    <img :src="selectedItem.輔具照片 || 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500'" :alt="selectedItem.輔具名稱" class="w-full h-full object-cover">
+                    <button @click="selectedItem = null" class="absolute top-4 right-4 bg-white/80 hover:bg-white text-gray-700 w-8 h-8 rounded-full flex items-center justify-center transition-all">✕</button>
+                </div>
+                <div class="p-6">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded">{{ selectedItem.輔具編號 }}</span>
+                        <span class="text-xs text-gray-400">{{ selectedItem.分類 }}</span>
+                    </div>
+                    <h2 class="text-xl font-bold text-gray-900 mb-3">{{ selectedItem.輔具名稱 }}</h2>
+                    <p class="text-sm text-gray-600 leading-relaxed mb-4 whitespace-pre-line">{{ selectedItem.功能簡介 }}</p>
+                    
+                    <div class="bg-gray-50 p-4 rounded-xl text-xs text-gray-500 space-y-1.5 mb-6">
+                        <div><strong>適用對象：</strong> {{ selectedItem.適用對象 }}</div>
+                        <div><strong>存放位置：</strong> {{ selectedItem.保管位置 }}</div>
+                        <div><strong>目前狀態：</strong> <span :class="selectedItem.目前狀態 === '可借用' ? 'text-green-600 font-bold': 'text-red-500 font-bold'">{{ selectedItem.currently_status }}</span></div>
+                    </div>
+                    
+                    <a href="https://forms.google.com" target="_blank"
+                       class="block w-full text-center bg-[#2C4A3E] hover:bg-[#1e332b] text-white text-sm font-medium py-3 rounded-xl transition-colors tracking-widest shadow-sm">
+                        線上申請預約借用
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <footer class="bg-white border-t border-gray-200 py-6 text-center text-xs text-gray-400 tracking-wider">
+            &copy; 2026 大專校院資源教室. All Obligation.
+        </footer>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                // ====== ⚠️ 請在這裡更換成你從 Google 試算表複製過來的「發布到網路 CSV 網址」 ⚠️ ======
+                const googleSheetCsvUrl = '請在這裡貼上你的Google試算表CSV網址';
+
+                const equipments = ref
