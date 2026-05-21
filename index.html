@@ -150,7 +150,7 @@
                 });
 
                 const fetchData = () => {
-                    if(!googleSheetCsvUrl || googleSheetCsvUrl.includes('請在這裡貼上')) {
+                    if(!googleSheetCsvUrl || googleSheetCsvUrl.includes('https://docs.google.com/spreadsheets/d/e/2PACX-1vStcS8WMjqJqGAhvOg0bPczxCgnGKpZWGU7r6t_XHrKFsxL6v_5gNUdvhf7ZhX4t13mOTrfVQ0Tx6JZ/pub?output=csv')) {
                         console.log('正在顯示系統預設測試資料...');
                         equipments.value = [
                             { 輔具編號: 'VT-001', 輔具名稱: '數位便攜擴視機', 分類: '視覺輔具', 目前狀態: '可借用', 保管位置: 'A櫃', 功能簡介: '提供低視能學生課堂看黑板與閱讀課本放大使用，支援色彩對比調整。', 適用對象: '低視能、弱視同學', 輔具照片: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500' },
