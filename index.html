@@ -99,7 +99,7 @@
                     <div class="bg-gray-50 p-4 rounded-xl text-xs text-gray-500 space-y-1.5 mb-6">
                         <div><strong>適用對象：</strong> {{ selectedItem.適用對象 }}</div>
                         <div><strong>存放位置：</strong> {{ selectedItem.保管位置 }}</div>
-                        <div><strong>目前狀態：</strong> <span :class="selectedItem.目前狀態 === '可借用' ? 'text-green-600 font-bold': 'text-red-500 font-bold'">{{ selectedItem.currently_status }}</span></div>
+                        <div><strong>目前狀態：</strong> <span :class="selectedItem.目前狀態 === '可借用' ? 'text-green-600 font-bold': 'text-red-500 font-bold'">{{ selectedItem.目前狀態 }}</span></div>
                     </div>
                     
                     <a href="https://forms.google.com" target="_blank"
