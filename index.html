@@ -60,7 +60,7 @@
                         
                         <span :class="getStatusClass(item.目前狀態)"
                               class="absolute top-3 right-3 px-2.5 py-1 text-[10px] font-bold tracking-wider rounded-full shadow-sm">
-                            {{ item.目前狀態 }}
+                            {{ item.currently_status || item.目前狀態 }}
                         </span>
                     </div>
 
@@ -83,7 +83,7 @@
         </main>
 
         <div v-if="selectedItem" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" @click.self="selectedItem = null">
-            <div class="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl animate-fade-in">
+            <div class="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl">
                 <div class="relative aspect-video bg-gray-100">
                     <img :src="selectedItem.輔具照片 || 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500'" :alt="selectedItem.輔具名稱" class="w-full h-full object-cover">
                     <button @click="selectedItem = null" class="absolute top-4 right-4 bg-white/80 hover:bg-white text-gray-700 w-8 h-8 rounded-full flex items-center justify-center transition-all">✕</button>
@@ -99,7 +99,7 @@
                     <div class="bg-gray-50 p-4 rounded-xl text-xs text-gray-500 space-y-1.5 mb-6">
                         <div><strong>適用對象：</strong> {{ selectedItem.適用對象 }}</div>
                         <div><strong>存放位置：</strong> {{ selectedItem.保管位置 }}</div>
-                        <div><strong>目前狀態：</strong> <span :class="selectedItem.目前狀態 === '可借用' ? 'text-green-600 font-bold': 'text-red-500 font-bold'">{{ selectedItem.目前狀態 }}</span></div>
+                        <div><strong>目前狀態：</strong> <span :class="selectedItem.目前狀態 === '可借用' ? 'text-green-600 font-bold': 'text-amber-600 font-bold'">{{ selectedItem.目前狀態 }}</span></div>
                     </div>
                     
                     <a href="https://forms.google.com" target="_blank"
@@ -123,4 +123,82 @@
                 // ====== ⚠️ 請在這裡更換成你從 Google 試算表複製過來的「發布到網路 CSV 網址」 ⚠️ ======
                 const googleSheetCsvUrl = '請在這裡貼上你的Google試算表CSV網址';
 
-                const equipments = ref
+                const equipments = ref([]);
+                const loading = ref(true);
+                const searchQuery = ref('');
+                const currentCategory = ref('全部');
+                const selectedItem = ref(null);
+
+                const categories = computed(() => {
+                    const cats = equipments.value.map(item => item.分類).filter(Boolean);
+                    return [...new Set(cats)];
+                });
+
+                const filteredEquipments = computed(() => {
+                    return equipments.value.filter(item => {
+                        const matchesSearch = !searchQuery.value || 
+                            item.輔具名稱?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+                            item.功能簡介?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+                            item.輔具編號?.toLowerCase().includes(searchQuery.value.toLowerCase());
+                        
+                        const matchesCategory = currentCategory.value === '全部' || item.分類 === currentCategory.value;
+                        
+                        return matchesSearch && matchesCategory;
+                    });
+                });
+
+                const fetchData = () => {
+                    if(!googleSheetCsvUrl || googleSheetCsvUrl.includes('請在這裡貼上')) {
+                        console.log('正在顯示系統預設測試資料...');
+                        equipments.value = [
+                            { 輔具編號: 'VT-001', 輔具名稱: '數位便攜擴視機', 分類: '視覺輔具', 目前狀態: '可借用', 保管位置: 'A櫃', 功能簡介: '提供低視能學生課堂看黑板與閱讀課本放大使用，支援色彩對比調整。', 適用對象: '低視能、弱視同學', 輔具照片: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500' },
+                            { 輔具編號: 'HT-002', 輔具名稱: 'FM無線導聽系統', 分類: '聽覺輔具', 目前狀態: '已借出', 保管位置: 'B櫃', 功能簡介: '搭配講者配戴之麥克風，直接將清晰語音傳送至學生端接收器。', 適用對象: '聽障同學', 輔具照片: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500' }
+                        ];
+                        loading.value = false;
+                        return;
+                    }
+
+                    Papa.parse(googleSheetCsvUrl, {
+                        download: true,
+                        header: true,
+                        complete: (results) => {
+                            equipments.value = results.data.filter(item => item.輔具編號);
+                            loading.value = false;
+                        },
+                        error: (error) => {
+                            console.error('讀取資料失敗:', error);
+                            loading.value = false;
+                        }
+                    });
+                };
+
+                const getStatusClass = (status) => {
+                    if (status === '可借用') return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+                    if (status === '已借出') return 'bg-amber-50 text-amber-700 border border-amber-200';
+                    return 'bg-gray-100 text-gray-600 border border-gray-200';
+                };
+
+                const openModal = (item) => {
+                    selectedItem.value = item;
+                };
+
+                onMounted(() => {
+                    fetchData();
+                });
+
+                return {
+                    equipments,
+                    loading,
+                    searchQuery,
+                    currentCategory,
+                    categories,
+                    filteredEquipments,
+                    selectedItem,
+                    getStatusClass,
+                    openModal
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
