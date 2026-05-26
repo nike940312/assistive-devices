@@ -8,90 +8,78 @@
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
-<body class="bg-[#F9F6F0] text-gray-800 font-sans">
+<body class="bg-[#F9F6F0] text-gray-800 font-sans m-0 p-0">
 
     <div id="app" class="min-h-screen flex flex-col">
         <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
             <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div class="text-center sm:text-left">
-                    <h1 class="text-xl font-bold tracking-widest text-[#2C4A3E]">Resource Room Learning Aids Resource Network
-                    </h1>
+                    <h1 class="text-xl font-bold tracking-widest text-[#2C4A3E]">OUR OBLIGATION</h1>
                     <p class="text-xs text-gray-400 tracking-wider mt-0.5">資源教室學習輔具資源網</p>
                 </div>
-                <div class="w-full sm:w-64">
+                <div class="w-full sm:w-72">
                     <input type="text" v-model="searchQuery" placeholder="搜尋輔具名稱或關鍵字..." 
-                           class="w-full px-4 py-2 border border-gray-300 rounded-full text-sm focus:outline-none focus:border-[#2C4A3E] bg-[#FDFDFD]">
+                           class="w-full px-4 py-2 rounded-full bg-gray-100 text-sm border-0 focus:ring-2 focus:ring-[#2C4A3E] focus:bg-white transition-all">
                 </div>
             </div>
         </header>
 
-        <section class="max-w-7xl mx-auto px-4 py-6 w-full">
-            <div class="flex flex-wrap gap-2 justify-center border-b border-gray-200 pb-4">
-                <button @click="currentCategory = '全部'" 
-                        :class="currentCategory === '全部' ? 'bg-[#2C4A3E] text-white' : 'bg-white text-gray-600 hover:bg-gray-100'"
-                        class="px-4 py-2 rounded-full text-xs font-medium tracking-wider transition-all duration-200 shadow-sm border border-gray-100">
-                    ALL. 全部輔具
-                </button>
-                <button v-for="cat in categories" @click="currentCategory = cat"
-                        :class="currentCategory === cat ? 'bg-[#2C4A3E] text-white' : 'bg-white text-gray-600 hover:bg-gray-100'"
-                        class="px-4 py-2 rounded-full text-xs font-medium tracking-wider transition-all duration-200 shadow-sm border border-gray-100">
-                    {{ cat.toUpperCase() }}
+        <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-8">
+            <div class="flex flex-wrap justify-center gap-2 mb-8">
+                <button v-for="cat in categories" :key="cat" @click="currentCategory = cat"
+                        :class="currentCategory === cat ? 'bg-[#2C4A3E] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                        class="px-4 py-1.5 rounded-full text-xs font-medium transition-all shadow-sm border border-gray-100">
+                    {{ cat === '全部' ? 'ALL. 全部輔具' : cat }}
                 </button>
             </div>
-        </section>
 
-        <main class="flex-grow max-w-7xl mx-auto px-4 pb-16 w-full">
-            <div v-if="loading" class="flex flex-col items-center justify-center py-24 gap-3">
-                <div class="w-8 h-8 border-4 border-[#2C4A3E] border-t-transparent rounded-full animate-spin"></div>
-                <p class="text-sm text-gray-400 tracking-widest">正在同步雲端輔具資料...</p>
+            <div v-if="loading" class="text-center py-20">
+                <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-300 border-t-[#2C4A3E] mb-4"></div>
+                <p class="text-sm text-gray-500 tracking-widest">正在同步更新雲端輔具資料...</p>
             </div>
 
-            <div v-if="!loading && filteredEquipments.length === 0" class="text-center py-24 text-gray-400">
-                沒有找到符合條件的輔具設備。
-            </div>
-
-            <div v-if="!loading" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+            <div v-else-if="filteredEquipments.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div v-for="item in filteredEquipments" :key="item.輔具編號" 
-                     class="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 flex flex-col group border border-gray-100">
-                    
-                    <div class="relative bg-gray-100 aspect-square overflow-hidden">
+                     class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all border border-gray-100 flex flex-col group">
+                    <div class="relative aspect-[4/3] bg-gray-100 overflow-hidden">
                         <img :src="item.輔具照片 || 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500'" 
-                             :alt="item.語音說明文字 || item.輔具名稱"
-                             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
-                        
-                        <span :class="getStatusClass(item.目前狀態)"
-                              class="absolute top-3 right-3 px-2.5 py-1 text-[10px] font-bold tracking-wider rounded-full shadow-sm">
+                             :alt="item.輔具名稱" class="w-full h-full object-cover group-hover:scale-103 transition-transform duration-500">
+                        <span :class="getStatusClass(item.currently_status || item.目前狀態)" class="absolute top-3 right-3 text-[10px] px-2.5 py-1 rounded-full font-bold shadow-sm">
                             {{ item.currently_status || item.目前狀態 }}
                         </span>
                     </div>
-
-                    <div class="p-5 flex flex-col flex-grow justify-between">
+                    <div class="p-5 flex-1 flex flex-col justify-between">
                         <div>
-                            <span class="text-[10px] tracking-widest text-gray-400 font-semibold block mb-1 uppercase">{{ item.分類 }}</span>
-                            <h3 class="font-bold text-gray-800 text-base group-hover:text-[#2C4A3E] transition-colors line-clamp-1">{{ item.輔具名稱 }}</h3>
-                            <p class="text-xs text-gray-500 mt-2 line-clamp-2 min-h-[2rem] leading-relaxed">{{ item.功能簡介 }}</p>
+                            <span class="text-[10px] text-gray-400 font-bold tracking-widest block mb-1 uppercase">{{ item.分類 }}</span>
+                            <h3 class="text-base font-bold text-gray-900 mb-2 line-clamp-1 group-hover:text-[#2C4A3E] transition-colors">{{ item.輔具名稱 }}</h3>
+                            <p class="text-xs text-gray-500 line-clamp-2 mb-4 leading-relaxed min-h-[2rem]">{{ item.功能簡介 }}</p>
                         </div>
-                        
-                        <div class="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
-                            <span class="text-xs text-gray-400">位置：{{ item.保管位置 }}</span>
-                            <button @click="openModal(item)" class="text-xs font-semibold tracking-wider text-[#2C4A3E] hover:underline">
-                                查看詳情 →
+                        <div class="pt-4 border-t border-gray-100 flex justify-between items-center text-xs text-gray-400">
+                            <span>位置：{{ item.保管位置 }}</span>
+                            <button @click="openModal(item)" class="text-[#2C4A3E] font-semibold hover:underline flex items-center gap-1">
+                                查看詳情 ➔
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
+
+            <div v-else class="text-center py-20 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                <p class="text-sm text-gray-400">找不到符合條件的輔具資料</p>
+            </div>
         </main>
 
         <div v-if="selectedItem" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" @click.self="selectedItem = null">
-            <div class="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl">
+            <div class="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl relative">
+                <button @click="selectedItem = null" class="absolute top-4 right-4 bg-white/80 hover:bg-white text-gray-700 w-8 h-8 rounded-full flex items-center justify-center transition-all z-10">✕</button>
+
                 <div class="relative aspect-video bg-gray-100">
                     <img :src="selectedItem.輔具照片 || 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500'" :alt="selectedItem.輔具名稱" class="w-full h-full object-cover">
-                    <button @click="selectedItem = null" class="absolute top-4 right-4 bg-white/80 hover:bg-white text-gray-700 w-8 h-8 rounded-full flex items-center justify-center transition-all">✕</button>
                 </div>
+
                 <div class="p-6">
                     <div class="flex items-center gap-2 mb-2">
-                        <span class="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] rounded">{{ selectedItem.輔具編號 }}</span>
+                        <span class="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded font-mono">{{ selectedItem.輔具編號 }}</span>
                         <span class="text-xs text-gray-400">{{ selectedItem.分類 }}</span>
                     </div>
                     <h2 class="text-xl font-bold text-gray-900 mb-3">{{ selectedItem.輔具名稱 }}</h2>
@@ -101,18 +89,18 @@
                         <div><strong>適用對象：</strong> {{ selectedItem.適用對象 }}</div>
                         <div><strong>存放位置：</strong> {{ selectedItem.保管位置 }}</div>
                         <div><strong>目前狀態：</strong> <span :class="selectedItem.目前狀態 === '可借用' ? 'text-green-600 font-bold': 'text-amber-600 font-bold'">{{ selectedItem.目前狀態 }}</span></div>
-                        <div><strong>輔具數量：</strong> {{ selectedItem.數量 }}</div>
+                        <div><strong>輔具數量：</strong> {{ selectedItem.數量 || '1' }}</div>
                     </div>
-                    
+
                     <a href="https://forms.google.com" target="_blank"
-                       class="block w-full text-center bg-[#2C4A3E] hover:bg-[#1e332b] text-white text-sm font-medium py-3 rounded-xl transition-colors tracking-widest shadow-sm">
+                       class="block w-full text-center bg-[#2C4A3E] hover:bg-[#1E332B] text-white text-sm font-medium py-3 rounded-xl transition-all shadow-sm tracking-widest">
                         線上申請預約借用
                     </a>
                 </div>
             </div>
         </div>
 
-        <footer class="bg-white border-t border-gray-200 py-6 text-center text-xs text-gray-400 tracking-wider">
+        <footer class="bg-white border-t border-gray-100 py-6 text-center text-xs text-gray-400 tracking-wider">
             &copy; 2026 大專校院資源教室. All Obligation.
         </footer>
     </div>
@@ -122,26 +110,61 @@
 
         createApp({
             setup() {
-                // ====== ⚠️ 請在這裡更換成你從 Google 試算表複製過來的「發布到網路 CSV 網址」 ⚠️ ======
-                const googleSheetCsvUrl = '請在這裡貼上你的Google試算表CSV網址';
+                // 已自動為您更換為真實的 Google 試算表 CSV 網址
+                const googleSheetCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vStcS8WMjqJqGAhvOg0bPczxCgnGKpZWGU7r6t_XHrKFsxL6v_5gNUdvhf7ZhX4t13mOTrfVQ0Tx6JZ/pub?output=csv';
 
                 const equipments = ref([]);
                 const loading = ref(true);
                 const searchQuery = ref('');
                 const currentCategory = ref('全部');
+                const categories = ref(['全部']);
                 const selectedItem = ref(null);
 
-                const categories = computed(() => {
-                    const cats = equipments.value.map(item => item.分類).filter(Boolean);
-                    return [...new Set(cats)];
-                });
+                // 獲取與載入資料邏輯
+                const fetchData = () => {
+                    if(!googleSheetCsvUrl || googleSheetCsvUrl.includes('請在這裡貼上')) {
+                        console.log('正在顯示系統預設測試資料...');
+                        equipments.value = [
+                            { 輔具編號: 'VT-001', 輔具名稱: '數位便攜擴視機', 分類: '視覺輔具', 目前狀態: '可借用', 保管位置: 'A櫃', 功能簡介: '提供低視能學生課堂看黑板與閱讀課本放大使用，支援色彩對比調整。', 適用對象: '低視能、弱視同學', 輔具照片: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500', 數量: '3' },
+                            { 輔具編號: 'HT-002', 輔具名稱: 'FM無線導聽系統', 分類: '聽覺輔具', 目前狀態: '已借出', 保管位置: 'B櫃', 功能簡介: '搭配講者配戴之麥克風，直接將清晰語音傳送至學生端接收器。', 適用對象: '聽障同學', 輔具照片: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500', 數量: '1' }
+                        ];
+                        categories.value = ['全部', '視覺輔具', '聽覺輔具'];
+                        loading.value = false;
+                        return;
+                    }
 
+                    // 解析真實 Google 試算表 CSV 網址
+                    Papa.parse(googleSheetCsvUrl, {
+                        download: true,
+                        header: true,
+                        skipEmptyLines: true,
+                        complete: (results) => {
+                            // 過濾掉沒有輔具編號的空白行
+                            equipments.value = results.data.filter(item => item.輔具編號);
+                            
+                            // 動態從試算表中抓取不重複的分類並更新分類選單
+                            const cats = new Set(['全部']);
+                            equipments.value.forEach(item => {
+                                if(item.分類) cats.add(item.分類);
+                            });
+                            categories.value = Array.from(cats);
+                            
+                            loading.value = false;
+                        },
+                        error: (error) => {
+                            console.error('讀取試算表資料失敗:', error);
+                            loading.value = false;
+                        }
+                    });
+                };
+
+                // 關鍵字與分類過濾邏輯
                 const filteredEquipments = computed(() => {
                     return equipments.value.filter(item => {
                         const matchesSearch = !searchQuery.value || 
-                            item.輔具名稱?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-                            item.功能簡介?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-                            item.輔具編號?.toLowerCase().includes(searchQuery.value.toLowerCase());
+                            (item.輔具名稱?.toLowerCase().includes(searchQuery.value.toLowerCase())) ||
+                            (item.功能簡介?.toLowerCase().includes(searchQuery.value.toLowerCase())) ||
+                            (item.輔具編號?.toLowerCase().includes(searchQuery.value.toLowerCase()));
                         
                         const matchesCategory = currentCategory.value === '全部' || item.分類 === currentCategory.value;
                         
@@ -149,31 +172,7 @@
                     });
                 });
 
-                const fetchData = () => {
-                    if(!googleSheetCsvUrl || googleSheetCsvUrl.includes('https://docs.google.com/spreadsheets/d/e/2PACX-1vStcS8WMjqJqGAhvOg0bPczxCgnGKpZWGU7r6t_XHrKFsxL6v_5gNUdvhf7ZhX4t13mOTrfVQ0Tx6JZ/pub?output=csv')) {
-                        console.log('正在顯示系統預設測試資料...');
-                        equipments.value = [
-                            { 輔具編號: 'VT-001', 輔具名稱: '數位便攜擴視機', 分類: '視覺輔具', 目前狀態: '可借用', 保管位置: 'A櫃', 功能簡介: '提供低視能學生課堂看黑板與閱讀課本放大使用，支援色彩對比調整。', 適用對象: '低視能、弱視同學', 輔具照片: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500' },
-                            { 輔具編號: 'HT-002', 輔具名稱: 'FM無線導聽系統', 分類: '聽覺輔具', 目前狀態: '已借出', 保管位置: 'B櫃', 功能簡介: '搭配講者配戴之麥克風，直接將清晰語音傳送至學生端接收器。', 適用對象: '聽障同學', 輔具照片: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500' }
-                        ];
-                        loading.value = false;
-                        return;
-                    }
-
-                    Papa.parse(googleSheetCsvUrl, {
-                        download: true,
-                        header: true,
-                        complete: (results) => {
-                            equipments.value = results.data.filter(item => item.輔具編號);
-                            loading.value = false;
-                        },
-                        error: (error) => {
-                            console.error('讀取資料失敗:', error);
-                            loading.value = false;
-                        }
-                    });
-                };
-
+                // 狀態標籤樣式設定
                 const getStatusClass = (status) => {
                     if (status === '可借用') return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
                     if (status === '已借出') return 'bg-amber-50 text-amber-700 border border-amber-200';
@@ -194,8 +193,8 @@
                     searchQuery,
                     currentCategory,
                     categories,
-                    filteredEquipments,
                     selectedItem,
+                    filteredEquipments,
                     getStatusClass,
                     openModal
                 };
