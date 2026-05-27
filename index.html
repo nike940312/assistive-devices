@@ -4,19 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>大專資源教室 - 學習輔具線上清單</title>
+    <!-- Tailwind CSS (高質感樣式庫) -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue 3 (前端動態資料框架) -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- PapaParse (CSV 雲端同步解析工具) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
 <body class="bg-[#F9F6F0] text-gray-800 font-sans m-0 p-0">
 
     <div id="app" class="min-h-screen flex flex-col">
+        <!-- 頁首 Header -->
         <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
             <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div class="text-center sm:text-left">
                     <h1 class="text-xl font-bold tracking-widest text-[#2C4A3E]">OUR OBLIGATION</h1>
                     <p class="text-xs text-gray-400 tracking-wider mt-0.5">資源教室學習輔具資源網</p>
                 </div>
+                <!-- 搜尋欄 -->
                 <div class="w-full sm:w-72">
                     <input type="text" v-model="searchQuery" placeholder="搜尋輔具名稱或關鍵字..." 
                            class="w-full px-4 py-2 rounded-full bg-gray-100 text-sm border-0 focus:ring-2 focus:ring-[#2C4A3E] focus:bg-white transition-all">
@@ -24,7 +29,9 @@
             </div>
         </header>
 
+        <!-- 主要內容區 -->
         <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-8">
+            <!-- 分類頁籤 -->
             <div class="flex flex-wrap justify-center gap-2 mb-8">
                 <button v-for="cat in categories" :key="cat" @click="currentCategory = cat"
                         :class="currentCategory === cat ? 'bg-[#2C4A3E] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
@@ -33,21 +40,26 @@
                 </button>
             </div>
 
+            <!-- 載入中狀態 -->
             <div v-if="loading" class="text-center py-20">
                 <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-300 border-t-[#2C4A3E] mb-4"></div>
                 <p class="text-sm text-gray-500 tracking-widest">正在同步更新雲端輔具資料...</p>
             </div>
 
+            <!-- 輔具卡片列表 -->
             <div v-else-if="filteredEquipments.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div v-for="item in filteredEquipments" :key="item.輔具編號" 
                      class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all border border-gray-100 flex flex-col group">
+                    <!-- 圖片區 -->
                     <div class="relative aspect-[4/3] bg-gray-100 overflow-hidden">
                         <img :src="item.輔具照片 || 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500'" 
                              :alt="item.輔具名稱" class="w-full h-full object-cover group-hover:scale-103 transition-transform duration-500">
-                        <span :class="getStatusClass(item.currently_status || item.currently_status === '可借用' || item.目前狀態)" class="absolute top-3 right-3 text-[10px] px-2.5 py-1 rounded-full font-bold shadow-sm">
-                            {{ item.currently_status || item.目前狀態 }}
+                        <!-- 動態狀態標籤（剩餘 0 自動切換紅標） -->
+                        <span :class="getStatusClass(getRemainingStock(item))" class="absolute top-3 right-3 text-[10px] px-2.5 py-1 rounded-full font-bold shadow-sm transition-colors">
+                            {{ getRemainingStock(item) > 0 ? (item.currently_status || item.目前狀態) : '已全數借出' }}
                         </span>
                     </div>
+                    <!-- 文字內容區 -->
                     <div class="p-5 flex-1 flex flex-col justify-between">
                         <div>
                             <span class="text-[10px] text-gray-400 font-bold tracking-widest block mb-1 uppercase">{{ item.分類 }}</span>
@@ -64,19 +76,24 @@
                 </div>
             </div>
 
+            <!-- 無資料狀態 -->
             <div v-else class="text-center py-20 bg-white rounded-2xl border border-gray-100 shadow-sm">
                 <p class="text-sm text-gray-400">找不到符合條件的輔具資料</p>
             </div>
         </main>
 
+        <!-- 彈出詳細視窗 Modal -->
         <div v-if="selectedItem" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" @click.self="selectedItem = null">
             <div class="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl relative">
+                <!-- 關閉按鈕 -->
                 <button @click="selectedItem = null" class="absolute top-4 right-4 bg-white/80 hover:bg-white text-gray-700 w-8 h-8 rounded-full flex items-center justify-center transition-all z-10">✕</button>
 
+                <!-- 詳細視窗圖片 -->
                 <div class="relative aspect-video bg-gray-100">
                     <img :src="selectedItem.輔具照片 || 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500'" :alt="selectedItem.輔具名稱" class="w-full h-full object-cover">
                 </div>
 
+                <!-- 詳細視窗內容 -->
                 <div class="p-6">
                     <div class="flex items-center gap-2 mb-2">
                         <span class="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded font-mono">{{ selectedItem.輔具編號 }}</span>
@@ -85,13 +102,25 @@
                     <h2 class="text-xl font-bold text-gray-900 mb-3">{{ selectedItem.輔具名稱 }}</h2>
                     <p class="text-sm text-gray-600 leading-relaxed mb-4 whitespace-pre-line">{{ selectedItem.功能簡介 }}</p>
                     
+                    <!-- 核心欄位資訊區 (加入動態剩餘庫存機制) -->
                     <div class="bg-gray-50 p-4 rounded-xl text-xs text-gray-500 space-y-1.5 mb-6">
                         <div><strong>適用對象：</strong> {{ selectedItem.適用對象 }}</div>
                         <div><strong>存放位置：</strong> {{ selectedItem.保管位置 }}</div>
-                        <div><strong>目前狀態：</strong> <span :class="selectedItem.目前狀態 === '可借用' ? 'text-green-600 font-bold': 'text-amber-600 font-bold'">{{ selectedItem.目前狀態 }}</span></div>
-                        <div><strong>輔具數量：</strong> {{ selectedItem.數量 || '1' }}</div>
+                        <div>
+                            <strong>目前狀態：</strong> 
+                            <span :class="getRemainingStock(selectedItem) > 0 ? 'text-green-600 font-bold': 'text-rose-600 font-bold'">
+                                {{ getRemainingStock(selectedItem) > 0 ? (selectedItem.目前狀態 || '可借用') : '已全數借出' }}
+                            </span>
+                        </div>
+                        <div>
+                            <strong>剩餘數量：</strong> 
+                            <span :class="getRemainingStock(selectedItem) > 0 ? 'text-gray-700 font-bold' : 'text-rose-600 font-bold'">
+                                {{ getRemainingStock(selectedItem) }} 台 / (總量 {{ parseInt(selectedItem.數量) || 1 }} 台)
+                            </span>
+                        </div>
                     </div>
 
+                    <!-- 線上借用按鈕 - Ragic 預約表單連結 -->
                     <a href="https://ap16.ragic.com/Rentalmust/rental-summary/7?ragic-web-embed=true&webaction=form&ver=new&version=2" target="_blank"
                        class="block w-full text-center bg-[#2C4A3E] hover:bg-[#1E332B] text-white text-sm font-medium py-3 rounded-xl transition-all shadow-sm tracking-widest font-semibold">
                         線上申請預約借用 (Ragic 系統)
@@ -100,6 +129,7 @@
             </div>
         </div>
 
+        <!-- 頁尾 Footer -->
         <footer class="bg-white border-t border-gray-100 py-6 text-center text-xs text-gray-400 tracking-wider">
             &copy; 2026 大專校院資源教室. All Obligation.
         </footer>
@@ -110,7 +140,7 @@
 
         createApp({
             setup() {
-                // 您的 Google 試算表 CSV 網址
+                // Google 試算表 CSV 網址
                 const googleSheetCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vStcS8WMjqJqGAhvOg0bPczxCgnGKpZWGU7r6t_XHrKFsxL6v_5gNUdvhf7ZhX4t13mOTrfVQ0Tx6JZ/pub?output=csv';
 
                 const equipments = ref([]);
@@ -139,10 +169,8 @@
                         header: true,
                         skipEmptyLines: true,
                         complete: (results) => {
-                            // 過濾掉沒有輔具編號的空白行
                             equipments.value = results.data.filter(item => item.輔具編號);
                             
-                            // 動態從試算表中抓取不重複的分類並更新分類選單
                             const cats = new Set(['全部']);
                             equipments.value.forEach(item => {
                                 if(item.分類) cats.add(item.分類);
@@ -156,6 +184,20 @@
                             loading.value = false;
                         }
                     });
+                };
+
+                // 計算動態庫存數量邏輯 (方案 A)
+                const getRemainingStock = (item) => {
+                    if (!item) return 0;
+                    const total = parseInt(item.數量) || 1; // 如果試算表欄位沒填數量，預設為 1
+                    const status = item.目前狀態 || item.currently_status;
+                    
+                    // 如果狀態填寫「已借出」，自動扣除 1 台
+                    if (status === '已借出') {
+                        const remaining = total - 1;
+                        return remaining > 0 ? remaining : 0;
+                    }
+                    return total;
                 };
 
                 // 關鍵字與分類過濾邏輯
@@ -172,11 +214,13 @@
                     });
                 });
 
-                // 狀態標籤樣式設定
-                const getStatusClass = (status) => {
-                    if (status === '可借用') return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
-                    if (status === '已借出') return 'bg-amber-50 text-amber-700 border border-amber-200';
-                    return 'bg-gray-100 text-gray-600 border border-gray-200';
+                // 狀態標籤樣式設定 (庫存 0 時自動切換成紅色質感樣式)
+                const getStatusClass = (remainingStock) => {
+                    if (remainingStock > 0) {
+                        return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+                    } else {
+                        return 'bg-rose-50 text-rose-700 border border-rose-200'; // 精緻的紅色警告標籤
+                    }
                 };
 
                 const openModal = (item) => {
@@ -195,6 +239,7 @@
                     categories,
                     selectedItem,
                     filteredEquipments,
+                    getRemainingStock,
                     getStatusClass,
                     openModal
                 };
