@@ -45,7 +45,7 @@
                         <img :src="item.輔具照片 || 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500'" 
                              :alt="item.輔具名稱" class="w-full h-full object-cover group-hover:scale-103 transition-transform duration-500">
                         <span :class="getStatusClass(getRemainingStock(item))" class="absolute top-3 right-3 text-[10px] px-2.5 py-1 rounded-full font-bold shadow-sm transition-colors">
-                            {{ getRemainingStock(item) > 0 ? (item.currently_status || item.currently_status === '可借用' || item.currently_status === '可借用' || item.目前狀態) : '已全數借出' }}
+                            {{ getRemainingStock(item) > 0 ? (item.currently_status || item.目前狀態) : '已全數借出' }}
                         </span>
                     </div>
                     <div class="p-5 flex-1 flex flex-col justify-between">
@@ -102,7 +102,7 @@
                         </div>
                     </div>
 
-                    <a href="https://forms.google.com" target="_blank"
+                    <a :href="getFormUrl(selectedItem)" target="_blank"
                        class="block w-full text-center bg-[#2C4A3E] hover:bg-[#1E332B] text-white text-sm font-medium py-3 rounded-xl transition-all shadow-sm tracking-widest font-semibold">
                         線上申請預約借用
                     </a>
@@ -166,6 +166,17 @@
                     });
                 };
 
+                // 自動抓取表單網址的強化邏輯 (相容多種常見欄位打法)
+                const getFormUrl = (item) => {
+                    if (!item) return 'https://forms.google.com';
+                    
+                    // 自動尋找試算表中類似的欄位字眼
+                    const url = item.預約表單 || item.google表單 || item.Google表單 || item.表單網址 || item.表單連結 || item.預約連結;
+                    
+                    // 如果有找到且有寫內容，就回傳該網址；否則去 Google 表單首頁
+                    return (url && url.trim() !== '') ? url.trim() : 'https://forms.google.com';
+                };
+
                 // 計算動態庫存數量邏輯
                 const getRemainingStock = (item) => {
                     if (!item) return 0;
@@ -218,6 +229,7 @@
                     categories,
                     selectedItem,
                     filteredEquipments,
+                    getFormUrl,
                     getRemainingStock,
                     getStatusClass,
                     openModal
