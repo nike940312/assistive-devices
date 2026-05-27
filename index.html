@@ -7,10 +7,13 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        [v-cloak] { display: none !important; }
+    </style>
 </head>
 <body class="bg-[#F9F6F0] text-gray-800 font-sans m-0 p-0">
 
-    <div id="app" class="min-h-screen flex flex-col">
+    <div id="app" v-cloak class="min-h-screen flex flex-col">
         <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
             <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div class="text-center sm:text-left">
@@ -39,23 +42,29 @@
             </div>
 
             <div v-else-if="filteredEquipments.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div v-for="item in filteredEquipments" :key="item.輔具編號" 
+                <div v-for="item in filteredEquipments" :key="getValue(item, ['編號', '輔具編號', 'id']) || Math.random()" 
                      class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all border border-gray-100 flex flex-col group">
                     <div class="relative aspect-[4/3] bg-gray-100 overflow-hidden">
-                        <img :src="item.輔具照片 || 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500'" 
-                             :alt="item.輔具名稱" class="w-full h-full object-cover group-hover:scale-103 transition-transform duration-500">
-                        <span :class="getStatusClass(getRemainingStock(item))" class="absolute top-3 right-3 text-[10px] px-2.5 py-1 rounded-full font-bold shadow-sm transition-colors">
-                            {{ getRemainingStock(item) > 0 ? (item.currently_status || item.目前狀態) : '已全數借出' }}
+                        <img :src="getImgUrl(item)" 
+                             :alt="getValue(item, ['輔具名稱', '名稱', '品名'])" class="w-full h-full object-cover group-hover:scale-103 transition-transform duration-500">
+                        <span :class="getStatusClass(item)" class="absolute top-3 right-3 text-[10px] px-2.5 py-1 rounded-full font-bold shadow-sm transition-colors">
+                            {{ getStatusText(item) }}
                         </span>
                     </div>
                     <div class="p-5 flex-1 flex flex-col justify-between">
                         <div>
-                            <span class="text-[10px] text-gray-400 font-bold tracking-widest block mb-1 uppercase">{{ item.分類 }}</span>
-                            <h3 class="text-base font-bold text-gray-900 mb-2 line-clamp-1 group-hover:text-[#2C4A3E] transition-colors">{{ item.輔具名稱 }}</h3>
-                            <p class="text-xs text-gray-500 line-clamp-2 mb-4 leading-relaxed min-h-[2rem]">{{ item.功能簡介 }}</p>
+                            <span class="text-[10px] text-gray-400 font-bold tracking-widest block mb-1 uppercase">
+                                {{ getValue(item, ['分類', '輔具分類', '類別']) || '學習輔具' }}
+                            </span>
+                            <h3 class="text-base font-bold text-gray-900 mb-2 line-clamp-1 group-hover:text-[#2C4A3E] transition-colors">
+                                {{ getValue(item, ['輔具名稱', '名稱', '品名']) || '未命名輔具' }}
+                            </h3>
+                            <p class="text-xs text-gray-500 line-clamp-2 mb-4 leading-relaxed min-h-[2rem]">
+                                {{ getValue(item, ['功能簡介', '功能說明', '簡介', '說明']) || '暫無詳細功能描述。歡迎點擊查看詳情。' }}
+                            </p>
                         </div>
                         <div class="pt-4 border-t border-gray-100 flex justify-between items-center text-xs text-gray-400">
-                            <span>位置：{{ item.保管位置 }}</span>
+                            <span>位置：{{ getValue(item, ['保管位置', '存放位置', '位置', '地點']) || '資源教室' }}</span>
                             <button @click="openModal(item)" class="text-[#2C4A3E] font-semibold hover:underline flex items-center gap-1">
                                 查看詳情 ➔
                             </button>
@@ -74,31 +83,36 @@
                 <button @click="selectedItem = null" class="absolute top-4 right-4 bg-white/80 hover:bg-white text-gray-700 w-8 h-8 rounded-full flex items-center justify-center transition-all z-10">✕</button>
 
                 <div class="relative aspect-video bg-gray-100">
-                    <img :src="selectedItem.輔具照片 || 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500'" :alt="selectedItem.輔具名稱" class="w-full h-full object-cover">
+                    <img :src="getImgUrl(selectedItem)" :alt="getValue(selectedItem, ['輔具名稱', '名稱', '品名'])" class="w-full h-full object-cover">
                 </div>
 
                 <div class="p-6">
                     <div class="flex items-center gap-2 mb-2">
-                        <span class="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded font-mono">{{ selectedItem.輔具編號 }}</span>
-                        <span class="text-xs text-gray-400">{{ selectedItem.分類 }}</span>
+                        <span class="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded font-mono">
+                            {{ getValue(selectedItem, ['編號', '輔具編號', 'id']) || '無編號' }}
+                        </span>
+                        <span class="text-xs text-gray-400">
+                            {{ getValue(selectedItem, ['分類', '輔具分類', '類別']) || '學習輔具' }}
+                        </span>
                     </div>
-                    <h2 class="text-xl font-bold text-gray-900 mb-3">{{ selectedItem.輔具名稱 }}</h2>
-                    <p class="text-sm text-gray-600 leading-relaxed mb-4 whitespace-pre-line">{{ selectedItem.功能簡介 }}</p>
+                    <h2 class="text-xl font-bold text-gray-900 mb-3">
+                        {{ getValue(selectedItem, ['輔具名稱', '名稱', '品名']) }}
+                    </h2>
+                    <p class="text-sm text-gray-600 leading-relaxed mb-4 whitespace-pre-line">
+                        {{ getValue(selectedItem, ['功能簡介', '功能說明', '簡介', '說明']) || '暫無詳細功能簡介。如有借用需求，請向資源教室老師洽詢確認。' }}
+                    </p>
                     
                     <div class="bg-gray-50 p-4 rounded-xl text-xs text-gray-500 space-y-1.5 mb-6">
-                        <div><strong>適用對象：</strong> {{ selectedItem.適用對象 }}</div>
-                        <div><strong>存放位置：</strong> {{ selectedItem.保管位置 }}</div>
+                        <div><strong>適用對象：</strong> {{ getValue(selectedItem, ['適用對象', '對象']) || '資源教室學生' }}</div>
+                        <div><strong>存放位置：</strong> {{ getValue(selectedItem, ['保管位置', '存放位置', '位置', '地點']) || '資源教室' }}</div>
                         <div>
                             <strong>目前狀態：</strong> 
-                            <span :class="getRemainingStock(selectedItem) > 0 ? 'text-green-600 font-bold': 'text-rose-600 font-bold'">
-                                {{ getRemainingStock(selectedItem) > 0 ? (selectedItem.目前狀態 || '可借用') : '已全數借出' }}
+                            <span :class="isDisable(selectedItem) ? 'text-rose-600 font-bold' : 'text-green-600 font-bold'">
+                                {{ getStatusText(selectedItem) }}
                             </span>
                         </div>
-                        <div>
-                            <strong>剩餘數量：</strong> 
-                            <span :class="getRemainingStock(selectedItem) > 0 ? 'text-gray-700 font-bold' : 'text-rose-600 font-bold'">
-                                {{ getRemainingStock(selectedItem) }} 台 / (總量 {{ parseInt(selectedItem.數量) || 1 }} 台)
-                            </span>
+                        <div v-if="getValue(selectedItem, ['數量', '總數量', '可借數量', '剩餘數量'])">
+                            <strong>總數量：</strong> {{ getValue(selectedItem, ['數量', '總數量', '可借數量', '剩餘數量']) }} 台
                         </div>
                     </div>
 
@@ -120,7 +134,6 @@
 
         createApp({
             setup() {
-                // Google 試算表 CSV 網址
                 const googleSheetCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vStcS8WMjqJqGAhvOg0bPczxCgnGKpZWGU7r6t_XHrKFsxL6v_5gNUdvhf7ZhX4t13mOTrfVQ0Tx6JZ/pub?output=csv';
 
                 const equipments = ref([]);
@@ -130,109 +143,108 @@
                 const categories = ref(['全部']);
                 const selectedItem = ref(null);
 
-                // 獲取與載入資料邏輯
-                const fetchData = () => {
-                    if(!googleSheetCsvUrl || googleSheetCsvUrl.includes('請在這裡貼上')) {
-                        console.log('正在顯示系統預設測試資料...');
-                        equipments.value = [
-                            { 輔具編號: 'VT-001', 輔具名稱: '數位便攜擴視機', 分類: '視覺輔具', 目前狀態: '可借用', 保管位置: 'A櫃', 功能簡介: '提供低視能學生課堂看黑板與閱讀課本放大使用，支援色彩對比調整。', 適用對象: '低視能、弱視同學', 輔具照片: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500', 數量: '3' },
-                            { 輔具編號: 'HT-002', 輔具名稱: 'FM無線導聽系統', 分類: '聽覺輔具', 目前狀態: '已借出', 保管位置: 'B櫃', 功能簡介: '搭配講者配戴之麥克風，直接將清晰語音傳送至學生端接收器。', 適用對象: '聽障同學', 輔具照片: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500', 數量: '1' }
-                        ];
-                        categories.value = ['全部', '視覺輔具', '聽覺輔具'];
-                        loading.value = false;
-                        return;
+                // 模糊相容核心函式：傳入可能的欄位陣列，自動找出有值的那一個
+                const getValue = (item, keys) => {
+                    if (!item) return '';
+                    for (let key of keys) {
+                        if (item[key] !== undefined && String(item[key]).trim() !== '') {
+                            return String(item[key]).trim();
+                        }
+                        const foundKey = Object.keys(item).find(k => k.replace(/\s+/g, '') === key.replace(/\s+/g, ''));
+                        if (foundKey && item[foundKey] !== undefined && String(item[foundKey]).trim() !== '') {
+                            return String(item[foundKey]).trim();
+                        }
                     }
+                    return '';
+                };
 
-                    // 解析真實 Google 試算表 CSV 網址
+                // 取得質感的筆電/耳機科技預設圖，若試算表有填寫正確網址則會自動覆蓋
+                const getImgUrl = (item) => {
+                    const img = getValue(item, ['照片', '輔具照片', '圖片', '連結', '網址']);
+                    if (img && img.startsWith('http')) return img;
+                    return 'https://images.unsplash.com/photo-1468495244123-6c6c332eeece?w=600'; 
+                };
+
+                // 取得顯示狀態文字
+                const getStatusText = (item) => {
+                    const status = getValue(item, ['狀態', '目前狀態', '借用狀態']);
+                    if (status) return status;
+                    
+                    const count = getValue(item, ['數量', '總數量', '可借數量', '剩餘數量']);
+                    if (count === '0' || count === 0) return '已借出';
+                    return '可借用';
+                };
+
+                // 判斷是否為不可借用狀態
+                const isDisable = (item) => {
+                    const status = getStatusText(item);
+                    return ['已借出', '缺貨中', '維修中', '不可借用', '0'].includes(status);
+                };
+
+                // 取得狀態標籤 CSS
+                const getStatusClass = (item) => {
+                    return isDisable(item) 
+                        ? 'bg-rose-50 text-rose-700 border border-rose-200' 
+                        : 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+                };
+
+                // 資料載入邏輯
+                const fetchData = () => {
                     Papa.parse(googleSheetCsvUrl, {
                         download: true,
                         header: true,
                         skipEmptyLines: true,
                         complete: (results) => {
-                            equipments.value = results.data.filter(item => item.輔具編號);
+                            equipments.value = results.data.filter(item => {
+                                return Object.values(item).some(val => val && String(val).trim() !== '');
+                            });
                             
                             const cats = new Set(['全部']);
                             equipments.value.forEach(item => {
-                                if(item.分類) cats.add(item.分類);
+                                const c = getValue(item, ['分類', '輔具分類', '類別']);
+                                if(c) cats.add(c);
                             });
                             categories.value = Array.from(cats);
-                            
                             loading.value = false;
                         },
                         error: (error) => {
-                            console.error('讀取試算表資料失敗:', error);
+                            console.error('讀取試算表失敗:', error);
                             loading.value = false;
                         }
                     });
                 };
 
-                // 自動抓取表單網址的強化邏輯 (相容多種常見欄位打法)
+                // 表單網址匹配
                 const getFormUrl = (item) => {
-                    if (!item) return 'https://forms.google.com';
-                    
-                    // 自動尋找試算表中類似的欄位字眼
-                    const url = item.預約表單 || item.google表單 || item.Google表單 || item.表單網址 || item.表單連結 || item.預約連結;
-                    
-                    // 如果有找到且有寫內容，就回傳該網址；否則去 Google 表單首頁
-                    return (url && url.trim() !== '') ? url.trim() : 'https://forms.google.com';
+                    const url = getValue(item, ['預約表單', 'google表單', 'Google表單', '表單網址', '表單連結', '申請連結']);
+                    if (url && url.startsWith('http')) return url;
+                    return 'https://forms.google.com';
                 };
 
-                // 計算動態庫存數量邏輯
-                const getRemainingStock = (item) => {
-                    if (!item) return 0;
-                    const total = parseInt(item.數量) || 1;
-                    const status = item.目前狀態 || item.currently_status;
-                    
-                    if (status === '已借出') {
-                        const remaining = total - 1;
-                        return remaining > 0 ? remaining : 0;
-                    }
-                    return total;
-                };
-
-                // 關鍵字與分類過濾邏輯
+                // 搜尋與分類過濾
                 const filteredEquipments = computed(() => {
                     return equipments.value.filter(item => {
+                        const name = getValue(item, ['輔具名稱', '名稱', '品名']);
+                        const intro = getValue(item, ['功能簡介', '功能說明', '簡介', '說明']);
+                        const id = getValue(item, ['編號', '輔具編號', 'id']);
+                        const cat = getValue(item, ['分類', '輔具分類', '類別']) || '學習輔具';
+                        
                         const matchesSearch = !searchQuery.value || 
-                            (item.輔具名稱?.toLowerCase().includes(searchQuery.value.toLowerCase())) ||
-                            (item.功能簡介?.toLowerCase().includes(searchQuery.value.toLowerCase())) ||
-                            (item.輔具編號?.toLowerCase().includes(searchQuery.value.toLowerCase()));
+                            name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+                            intro.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+                            id.toLowerCase().includes(searchQuery.value.toLowerCase());
                         
-                        const matchesCategory = currentCategory.value === '全部' || item.分類 === currentCategory.value;
-                        
+                        const matchesCategory = currentCategory.value === '全部' || cat === currentCategory.value;
                         return matchesSearch && matchesCategory;
                     });
                 });
 
-                // 狀態標籤樣式設定
-                const getStatusClass = (remainingStock) => {
-                    if (remainingStock > 0) {
-                        return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
-                    } else {
-                        return 'bg-rose-50 text-rose-700 border border-rose-200';
-                    }
-                };
+                const openModal = (item) => { selectedItem.value = item; };
 
-                const openModal = (item) => {
-                    selectedItem.value = item;
-                };
-
-                onMounted(() => {
-                    fetchData();
-                });
+                onMounted(() => { fetchData(); });
 
                 return {
-                    equipments,
-                    loading,
-                    searchQuery,
-                    currentCategory,
-                    categories,
-                    selectedItem,
-                    filteredEquipments,
-                    getFormUrl,
-                    getRemainingStock,
-                    getStatusClass,
-                    openModal
+                    loading, searchQuery, currentCategory, categories, selectedItem, filteredEquipments, getFormUrl, getStatusClass, openModal, getValue, getImgUrl, getStatusText, isDisable
                 };
             }
         }).mount('#app');
