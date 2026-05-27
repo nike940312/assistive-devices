@@ -18,7 +18,8 @@
         <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
             <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div class="text-center sm:text-left">
-                    <h1 class="text-xl font-bold tracking-widest text-[#2C4A3E]">OUR OBLIGATION</h1>
+                    <!-- 已成功更換為您的專屬網頁名稱 -->
+                    <h1 class="text-xl font-bold tracking-widest text-[#2C4A3E] uppercase">Resource Classroom Learning Aid Resource Network</h1>
                     <p class="text-xs text-gray-400 tracking-wider mt-0.5">資源教室學習輔具資源網</p>
                 </div>
                 <!-- 搜尋欄 -->
@@ -54,9 +55,9 @@
                     <div class="relative aspect-[4/3] bg-gray-100 overflow-hidden">
                         <img :src="item.輔具照片 || 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500'" 
                              :alt="item.輔具名稱" class="w-full h-full object-cover group-hover:scale-103 transition-transform duration-500">
-                        <!-- 動態狀態標籤（剩餘 0 自動切換紅標） -->
+                        <!-- 動態狀態標籤 -->
                         <span :class="getStatusClass(getRemainingStock(item))" class="absolute top-3 right-3 text-[10px] px-2.5 py-1 rounded-full font-bold shadow-sm transition-colors">
-                            {{ getRemainingStock(item) > 0 ? (item.currently_status || item.目前狀態) : '已全數借出' }}
+                            {{ getRemainingStock(item) > 0 ? (item.currently_status || item.currently_status === '可借用' || item.目前狀態) : '已全數借出' }}
                         </span>
                     </div>
                     <!-- 文字內容區 -->
@@ -102,7 +103,7 @@
                     <h2 class="text-xl font-bold text-gray-900 mb-3">{{ selectedItem.輔具名稱 }}</h2>
                     <p class="text-sm text-gray-600 leading-relaxed mb-4 whitespace-pre-line">{{ selectedItem.功能簡介 }}</p>
                     
-                    <!-- 核心欄位資訊區 (加入動態剩餘庫存機制) -->
+                    <!-- 核心欄位資訊區 -->
                     <div class="bg-gray-50 p-4 rounded-xl text-xs text-gray-500 space-y-1.5 mb-6">
                         <div><strong>適用對象：</strong> {{ selectedItem.適用對象 }}</div>
                         <div><strong>存放位置：</strong> {{ selectedItem.保管位置 }}</div>
@@ -156,7 +157,7 @@
                         console.log('正在顯示系統預設測試資料...');
                         equipments.value = [
                             { 輔具編號: 'VT-001', 輔具名稱: '數位便攜擴視機', 分類: '視覺輔具', 目前狀態: '可借用', 保管位置: 'A櫃', 功能簡介: '提供低視能學生課堂看黑板與閱讀課本放大使用，支援色彩對比調整。', 適用對象: '低視能、弱視同學', 輔具照片: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=500', 數量: '3' },
-                            { 輔具編號: 'HT-002', 輔具名稱: 'FM無線導聽系統', 分類: '聽覺輔具', 目前狀態: '已借出', 保管位置: 'B櫃', 功能簡介: '搭配講者配戴之麥克風，直接將清晰語音傳送至學生端接收器。', 適用對象: '聽障同學', 輔具照片: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500', 數量: '1' }
+                            { 輔具編號: 'HT-002', 輔成名稱: 'FM無線導聽系統', 分類: '聽覺輔具', 目前狀態: '已借出', 保管位置: 'B櫃', 功能簡介: '搭配講者配戴之麥克風，直接將清晰語音傳送至學生端接收器。', 適用對象: '聽障同學', 輔具照片: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500', 數量: '1' }
                         ];
                         categories.value = ['全部', '視覺輔具', '聽覺輔具'];
                         loading.value = false;
@@ -186,13 +187,12 @@
                     });
                 };
 
-                // 計算動態庫存數量邏輯 (方案 A)
+                // 計算動態庫存數量邏輯
                 const getRemainingStock = (item) => {
                     if (!item) return 0;
-                    const total = parseInt(item.數量) || 1; // 如果試算表欄位沒填數量，預設為 1
+                    const total = parseInt(item.數量) || 1;
                     const status = item.目前狀態 || item.currently_status;
                     
-                    // 如果狀態填寫「已借出」，自動扣除 1 台
                     if (status === '已借出') {
                         const remaining = total - 1;
                         return remaining > 0 ? remaining : 0;
@@ -214,12 +214,12 @@
                     });
                 });
 
-                // 狀態標籤樣式設定 (庫存 0 時自動切換成紅色質感樣式)
+                // 狀態標籤樣式設定
                 const getStatusClass = (remainingStock) => {
                     if (remainingStock > 0) {
                         return 'bg-emerald-50 text-emerald-700 border border-emerald-200';
                     } else {
-                        return 'bg-rose-50 text-rose-700 border border-rose-200'; // 精緻的紅色警告標籤
+                        return 'bg-rose-50 text-rose-700 border border-rose-200';
                     }
                 };
 
