@@ -8,6 +8,7 @@
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <style>
+        /* 防止 Vue 載入前的語法外露閃爍 */
         [v-cloak] { display: none !important; }
     </style>
 </head>
@@ -42,11 +43,11 @@
             </div>
 
             <div v-else-if="filteredEquipments.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div v-for="item in filteredEquipments" :key="getValue(item, ['編號', '輔具編號', 'id']) || Math.random()" 
+                <div v-for="item in filteredEquipments" :key="getKey(item)" 
                      class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all border border-gray-100 flex flex-col group">
                     <div class="relative aspect-[4/3] bg-gray-100 overflow-hidden">
                         <img :src="getImgUrl(item)" 
-                             :alt="getValue(item, ['輔具名稱', '名稱', '品名'])" class="w-full h-full object-cover group-hover:scale-103 transition-transform duration-500">
+                             :alt="getName(item)" class="w-full h-full object-cover group-hover:scale-103 transition-transform duration-500">
                         <span :class="getStatusClass(item)" class="absolute top-3 right-3 text-[10px] px-2.5 py-1 rounded-full font-bold shadow-sm transition-colors">
                             {{ getStatusText(item) }}
                         </span>
@@ -54,17 +55,17 @@
                     <div class="p-5 flex-1 flex flex-col justify-between">
                         <div>
                             <span class="text-[10px] text-gray-400 font-bold tracking-widest block mb-1 uppercase">
-                                {{ getValue(item, ['分類', '輔具分類', '類別']) || '學習輔具' }}
+                                {{ item.分類 || item.輔具分類 || item.類別 || '學習輔具' }}
                             </span>
                             <h3 class="text-base font-bold text-gray-900 mb-2 line-clamp-1 group-hover:text-[#2C4A3E] transition-colors">
-                                {{ getValue(item, ['輔具名稱', '名稱', '品名']) || '未命名輔具' }}
+                                {{ getName(item) }}
                             </h3>
                             <p class="text-xs text-gray-500 line-clamp-2 mb-4 leading-relaxed min-h-[2rem]">
-                                {{ getValue(item, ['功能簡介', '功能說明', '簡介', '說明']) || '暫無詳細功能描述。歡迎點擊查看詳情。' }}
+                                {{ item.功能簡介 || item.功能說明 || item.簡介 || item.說明 || '暫無詳細功能描述。歡迎點擊查看詳情。' }}
                             </p>
                         </div>
                         <div class="pt-4 border-t border-gray-100 flex justify-between items-center text-xs text-gray-400">
-                            <span>位置：{{ getValue(item, ['保管位置', '存放位置', '位置', '地點']) || '資源教室' }}</span>
+                            <span>位置：{{ item.保管位置 || item.存放位置 || item.位置 || item.地點 || '資源教室' }}</span>
                             <button @click="openModal(item)" class="text-[#2C4A3E] font-semibold hover:underline flex items-center gap-1">
                                 查看詳情 ➔
                             </button>
@@ -83,36 +84,36 @@
                 <button @click="selectedItem = null" class="absolute top-4 right-4 bg-white/80 hover:bg-white text-gray-700 w-8 h-8 rounded-full flex items-center justify-center transition-all z-10">✕</button>
 
                 <div class="relative aspect-video bg-gray-100">
-                    <img :src="getImgUrl(selectedItem)" :alt="getValue(selectedItem, ['輔具名稱', '名稱', '品名'])" class="w-full h-full object-cover">
+                    <img :src="getImgUrl(selectedItem)" :alt="getName(selectedItem)" class="w-full h-full object-cover">
                 </div>
 
                 <div class="p-6">
                     <div class="flex items-center gap-2 mb-2">
                         <span class="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded font-mono">
-                            {{ getValue(selectedItem, ['編號', '輔具編號', 'id']) || '無編號' }}
+                            {{ getKey(selectedItem) }}
                         </span>
                         <span class="text-xs text-gray-400">
-                            {{ getValue(selectedItem, ['分類', '輔具分類', '類別']) || '學習輔具' }}
+                            {{ selectedItem.分類 || selectedItem.輔具分類 || selectedItem.類別 || '學習輔具' }}
                         </span>
                     </div>
                     <h2 class="text-xl font-bold text-gray-900 mb-3">
-                        {{ getValue(selectedItem, ['輔具名稱', '名稱', '品名']) }}
+                        {{ getName(selectedItem) }}
                     </h2>
                     <p class="text-sm text-gray-600 leading-relaxed mb-4 whitespace-pre-line">
-                        {{ getValue(selectedItem, ['功能簡介', '功能說明', '簡介', '說明']) || '暫無詳細功能簡介。如有借用需求，請向資源教室老師洽詢確認。' }}
+                        {{ selectedItem.功能簡介 || selectedItem.功能說明 || selectedItem.簡介 || selectedItem.說明 || '暫無詳細功能簡介。如有借用需求，請向資源教室老師洽詢確認。' }}
                     </p>
                     
                     <div class="bg-gray-50 p-4 rounded-xl text-xs text-gray-500 space-y-1.5 mb-6">
-                        <div><strong>適用對象：</strong> {{ getValue(selectedItem, ['適用對象', '對象']) || '資源教室學生' }}</div>
-                        <div><strong>存放位置：</strong> {{ getValue(selectedItem, ['保管位置', '存放位置', '位置', '地點']) || '資源教室' }}</div>
+                        <div><strong>適用對象：</strong> {{ selectedItem.適用對象 || selectedItem.對象 || '資源教室同學' }}</div>
+                        <div><strong>存放位置：</strong> {{ selectedItem.保管位置 || selectedItem.存放位置 || selectedItem.位置 || selectedItem.地點 || '資源教室' }}</div>
                         <div>
                             <strong>目前狀態：</strong> 
                             <span :class="isDisable(selectedItem) ? 'text-rose-600 font-bold' : 'text-green-600 font-bold'">
                                 {{ getStatusText(selectedItem) }}
                             </span>
                         </div>
-                        <div v-if="getValue(selectedItem, ['數量', '總數量', '可借數量', '剩餘數量'])">
-                            <strong>總數量：</strong> {{ getValue(selectedItem, ['數量', '總數量', '可借數量', '剩餘數量']) }} 台
+                        <div v-if="getCount(selectedItem)">
+                            <strong>總數量：</strong> {{ getCount(selectedItem) }} 台
                         </div>
                     </div>
 
@@ -143,52 +144,59 @@
                 const categories = ref(['全部']);
                 const selectedItem = ref(null);
 
-                // 模糊相容核心函式：傳入可能的欄位陣列，自動找出有值的那一個
-                const getValue = (item, keys) => {
-                    if (!item) return '';
-                    for (let key of keys) {
-                        if (item[key] !== undefined && String(item[key]).trim() !== '') {
-                            return String(item[key]).trim();
-                        }
-                        const foundKey = Object.keys(item).find(k => k.replace(/\s+/g, '') === key.replace(/\s+/g, ''));
-                        if (foundKey && item[foundKey] !== undefined && String(item[foundKey]).trim() !== '') {
-                            return String(item[foundKey]).trim();
-                        }
-                    }
-                    return '';
+                // 統一清洗欄位鍵名（防空白、防大小寫）
+                const getCleanItem = (item) => {
+                    if (!item) return {};
+                    const cleaned = {};
+                    Object.keys(item).forEach(key => {
+                        cleaned[key.trim().replace(/\s+/g, '')] = String(item[key]).trim();
+                    });
+                    return cleaned;
                 };
 
-                // 取得質感的筆電/耳機科技預設圖，若試算表有填寫正確網址則會自動覆蓋
+                const getName = (item) => {
+                    const c = getCleanItem(item);
+                    return c.輔具名稱 || c.名稱 || c.品名 || '未命名輔具';
+                };
+
+                const getKey = (item) => {
+                    const c = getCleanItem(item);
+                    return c.編號 || c.輔具編號 || c.id || c.ID || getName(item);
+                };
+
+                const getCount = (item) => {
+                    const c = getCleanItem(item);
+                    return c.數量 || c.總數量 || c.可借數量 || c.剩餘數量 || '';
+                };
+
                 const getImgUrl = (item) => {
-                    const img = getValue(item, ['照片', '輔具照片', '圖片', '連結', '網址']);
+                    const c = getCleanItem(item);
+                    const img = c.照片 || c.輔具照片 || c.圖片 || c.連結 || c.網址;
                     if (img && img.startsWith('http')) return img;
                     return 'https://images.unsplash.com/photo-1468495244123-6c6c332eeece?w=600'; 
                 };
 
-                // 取得顯示狀態文字
                 const getStatusText = (item) => {
-                    const status = getValue(item, ['狀態', '目前狀態', '借用狀態']);
-                    if (status) return status;
-                    
-                    const count = getValue(item, ['數量', '總數量', '可借數量', '剩餘數量']);
+                    const c = getCleanItem(item);
+                    if (c.狀態 || c.目前狀態 || c.借用狀態) {
+                        return c.狀態 || c.目前狀態 || c.借用狀態;
+                    }
+                    const count = getCount(item);
                     if (count === '0' || count === 0) return '已借出';
                     return '可借用';
                 };
 
-                // 判斷是否為不可借用狀態
                 const isDisable = (item) => {
                     const status = getStatusText(item);
                     return ['已借出', '缺貨中', '維修中', '不可借用', '0'].includes(status);
                 };
 
-                // 取得狀態標籤 CSS
                 const getStatusClass = (item) => {
                     return isDisable(item) 
                         ? 'bg-rose-50 text-rose-700 border border-rose-200' 
                         : 'bg-emerald-50 text-emerald-700 border border-emerald-200';
                 };
 
-                // 資料載入邏輯
                 const fetchData = () => {
                     Papa.parse(googleSheetCsvUrl, {
                         download: true,
@@ -201,8 +209,9 @@
                             
                             const cats = new Set(['全部']);
                             equipments.value.forEach(item => {
-                                const c = getValue(item, ['分類', '輔具分類', '類別']);
-                                if(c) cats.add(c);
+                                const c = getCleanItem(item);
+                                const catName = c.分類 || c.輔具分類 || c.類別;
+                                if(catName) cats.add(catName);
                             });
                             categories.value = Array.from(cats);
                             loading.value = false;
@@ -214,20 +223,20 @@
                     });
                 };
 
-                // 表單網址匹配
                 const getFormUrl = (item) => {
-                    const url = getValue(item, ['預約表單', 'google表單', 'Google表單', '表單網址', '表單連結', '申請連結']);
+                    const c = getCleanItem(item);
+                    const url = c.預約表單 || c.google表單 || c.Google表單 || c.表單網址 || c.表單連結 || c.申請連結;
                     if (url && url.startsWith('http')) return url;
                     return 'https://forms.google.com';
                 };
 
-                // 搜尋與分類過濾
                 const filteredEquipments = computed(() => {
                     return equipments.value.filter(item => {
-                        const name = getValue(item, ['輔具名稱', '名稱', '品名']);
-                        const intro = getValue(item, ['功能簡介', '功能說明', '簡介', '說明']);
-                        const id = getValue(item, ['編號', '輔具編號', 'id']);
-                        const cat = getValue(item, ['分類', '輔具分類', '類別']) || '學習輔具';
+                        const name = getName(item);
+                        const c = getCleanItem(item);
+                        const intro = c.功能簡介 || c.功能說明 || c.簡介 || c.說明 || '';
+                        const id = String(getKey(item));
+                        const cat = c.分類 || c.輔具分類 || c.類別 || '學習輔具';
                         
                         const matchesSearch = !searchQuery.value || 
                             name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
@@ -244,7 +253,7 @@
                 onMounted(() => { fetchData(); });
 
                 return {
-                    loading, searchQuery, currentCategory, categories, selectedItem, filteredEquipments, getFormUrl, getStatusClass, openModal, getValue, getImgUrl, getStatusText, isDisable
+                    loading, searchQuery, currentCategory, categories, selectedItem, filteredEquipments, getFormUrl, getStatusClass, openModal, getName, getKey, getCount, getImgUrl, getStatusText, isDisable
                 };
             }
         }).mount('#app');
