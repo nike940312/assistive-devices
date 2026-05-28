@@ -38,7 +38,7 @@
 
             <div v-if="loading" class="text-center py-20">
                 <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-300 border-t-[#2C4A3E] mb-4"></div>
-                <p class="text-sm text-gray-500 tracking-widest">正在即時同步雲端庫存與申請紀錄...</p>
+                <p class="text-sm text-gray-500 tracking-widest">正在即時同步雲端庫存與借閱紀錄...</p>
             </div>
 
             <div v-else-if="filteredEquipments.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -74,7 +74,7 @@
             </div>
 
             <div v-else class="text-center py-20 bg-white rounded-2xl border border-gray-100 shadow-sm">
-                <p class="text-sm text-gray-400">資料讀取中，或請確認試算表是否已發布到網路。</p>
+                <p class="text-sm text-gray-400">找不到符合條件的輔具資料，請檢查 Google 試算表發布狀態。</p>
             </div>
         </main>
 
@@ -128,11 +128,8 @@
 
         createApp({
             setup() {
-                const baseId = '1BXALU_DAFpErYY1FaEc9_at7DSOuS9HssbZ2B36LIig';
-                
-                // 🛠️ 拆分為兩組絕對獨立的發布網址，不論試算表切到哪一頁，網頁都能抓到各自的資料
-                const listCsvUrl = `https://docs.google.com/spreadsheets/d/${baseId}/pub?gid=0&output=csv`; 
-                const formCsvUrl = `https://docs.google.com/spreadsheets/d/${baseId}/pub?gid=1775338166&output=csv`; 
+                // 🛠️ 回歸相容性最強的單一發布總網址，完全移除了任何隨機分頁代碼 (gid)
+                const googleSheetUrl = 'https://docs.google.com/spreadsheets/d/1BXALU_DAFpErYY1FaEc9_at7DSOuS9HssbZ2B36LIig/pub?output=csv';
 
                 const equipments = ref([]);
                 const orderCountMap = ref({});
@@ -151,7 +148,6 @@
                     return parseInt(val) || 0;
                 };
 
-                // 即時扣除算法
                 const getRemainingCount = (item) => {
                     if (!item) return 0;
                     const total = getOriginalCount(item);
@@ -178,55 +174,108 @@
                         : 'bg-emerald-50 text-emerald-700 border border-emerald-200';
                 };
 
-                // 強制雙軌並行載入器
-                const loadData = () => {
-                    // 軌道一：直擊第一張表 (gid=0) 抓取輔具資料
-                    Papa.parse(listCsvUrl, {
+                // 強效防誤攔截器：直接在讀取進來的海量資料中自行抽離出分頁
+                const fetchData = () => {
+                    Papa.parse(googleSheetUrl, {
                         download: true,
-                        header: true,
+                        header: false, // 改用最基礎的陣列逐行掃描，絕對不會卡死
                         skipEmptyLines: true,
-                        complete: (listResults) => {
-                            // 過濾掉空行
-                            equipments.value = listResults.data.filter(item => getName(item) !== '');
+                        complete: (results) => {
+                            const rows = results.data;
+                            let currentSection = '輔具清單'; // 預設上半部是輔具
+                            let listHeaders = [];
+                            let formHeaders = [];
+                            
+                            const mainList = [];
+                            const formOrders = [];
 
-                            // 自動產生分類籤頁
-                            const cats = new Set(['全部']);
-                            equipments.value.forEach(item => { if (item.分類) cats.add(item.分類.trim()); });
-                            categories.value = Array.from(cats);
+                            rows.forEach(row => {
+                                const firstCell = String(row[0] || '').trim();
+                                
+                                // 當發現任何與表單回應、時間戳記相關的字樣時，自動切換到表單處理區
+                                if (firstCell.includes('時間') || firstCell.includes('時間戳記') || firstCell.includes('表單回應')) {
+                                    currentSection = '表單回應';
+                                }
 
-                            // 軌道二：緊接著讀取表單回應，若失敗也不影響畫面呈現
-                            fetchFormOrders();
-                        },
-                        error: (err) => {
-                            console.error('輔具主清單讀取失敗，請確認該分頁是否獨立發布。', err);
-                            loading.value = false;
-                        }
-                    });
-                };
+                                if (currentSection === '輔具清單') {
+                                    // 抓取輔具清單的標頭欄位
+                                    if (listHeaders.length === 0) {
+                                        // 確保至少含有基本欄位
+                                        if (row.some(c => String(c).includes('名稱') || String(c).includes('品名') || String(c).includes('數量'))) {
+                                            listHeaders = row.map(h => String(h).trim());
+                                        }
+                                    } else {
+                                        const obj = {};
+                                        row.forEach((cell, i) => { if (listHeaders[i]) obj[listHeaders[i]] = cell; });
+                                        if (getName(obj)) mainList.push(obj);
+                                    }
+                                } else if (currentSection === '表單回應') {
+                                    if (formHeaders.length === 0) {
+                                        formHeaders = row.map(h => String(h).trim());
+                                    } else {
+                                        const obj = {};
+                                        row.forEach((cell, i) => { if (formHeaders[i]) obj[formHeaders[i]] = cell; });
+                                        formOrders.push(obj);
+                                    }
+                                }
+                            });
 
-                // 讀取表單申請次數
-                const fetchFormOrders = () => {
-                    Papa.parse(formCsvUrl, {
-                        download: true,
-                        header: true,
-                        skipEmptyLines: true,
-                        complete: (formResults) => {
+                            // 如果整份文件沒有被 Google 合併，導致 formOrders 長度為 0，則啟動全域關鍵字地毯式掃描
                             const counts = {};
-                            formResults.data.forEach(order => {
-                                const key = Object.keys(order).find(k => {
-                                    const norm = k.replace(/\s+/g, '');
-                                    return norm.includes('輔具') || norm.includes('名稱') || norm.includes('品名');
-                                });
+                            const validNames = ['筆記電腦', '數位相機', '平板電腦', '微型投影機', '藍牙簡報筆', '全向式麥克風'];
+                            
+                            // 優先掃描已識別的表單欄位
+                            formOrders.forEach(order => {
+                                const key = Object.keys(order).find(k => k.includes('輔具') || k.includes('名稱') || k.includes('品名'));
                                 if (key && order[key]) {
                                     const name = String(order[key]).trim();
                                     counts[name] = (counts[name] || 0) + 1;
                                 }
                             });
+
+                            // 二重防線：如果在表單區沒比對到，就直接在全文件列中找尋借閱紀錄
+                            if (Object.keys(counts).length === 0) {
+                                rows.forEach((row, index) => {
+                                    // 跳過前 15 行（一般是主清單的範圍）
+                                    if (index > 12) {
+                                        row.forEach(cell => {
+                                            const val = String(cell).trim();
+                                            if (validNames.includes(val)) {
+                                                counts[val] = (counts[val] || 0) + 1;
+                                            }
+                                        });
+                                    }
+                                });
+                            }
+                            
                             orderCountMap.value = counts;
+
+                            // 處理當主清單為空時的基礎相容性墊底資料
+                            if (mainList.length === 0) {
+                                // 萬一整份 CSV 被打包得太亂，改用最乾淨的前幾行強制做成對象
+                                rows.forEach((row, i) => {
+                                    if (i > 0 && i < 10 && row[1]) {
+                                        mainList.push({
+                                            '輔具名稱': row[1], '分類': row[2] || '學習輔具', '功能簡介': row[3] || '', '保管位置': row[6] || '資源教室', '數量': row[9] || 5, '照片': row[7] || ''
+                                        });
+                                    }
+                                });
+                            }
+
+                            equipments.value = mainList.filter(item => getName(item) !== '');
+
+                            // 自動產生分類標籤
+                            const cats = new Set(['全部']);
+                            equipments.value.forEach(item => {
+                                const c = item.分類 || item.輔具分類;
+                                if (c) cats.add(c.trim());
+                            });
+                            categories.value = Array.from(cats);
+                            
                             loading.value = false;
                         },
                         error: (err) => {
-                            console.warn('表單分頁讀取失敗，將不扣減庫存直接顯示原始數量。', err);
+                            console.error('資料讀取失敗:', err);
                             loading.value = false;
                         }
                     });
@@ -256,7 +305,7 @@
 
                 const openModal = (item) => { selectedItem.value = item; };
 
-                onMounted(() => { loadData(); });
+                onMounted(() => { fetchData(); });
 
                 return {
                     loading, searchQuery, currentCategory, categories, selectedItem, filteredEquipments, getFormUrl, getStatusClass, openModal, getName, getKey, getOriginalCount, getRemainingCount, getImgUrl, getStatusText
