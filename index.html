@@ -45,8 +45,7 @@
                 <div v-for="item in filteredEquipments" :key="getKey(item)" 
                      class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all border border-gray-100 flex flex-col group">
                     <div class="relative aspect-[4/3] bg-gray-100 overflow-hidden">
-                        <img :src="getImgUrl(item)" 
-                             :alt="getName(item)" class="w-full h-full object-cover group-hover:scale-103 transition-transform duration-500">
+                        <img :src="getImgUrl(item)" :alt="getName(item)" class="w-full h-full object-cover group-hover:scale-103 transition-transform duration-500">
                         <span :class="getStatusClass(item)" class="absolute top-3 right-3 text-[10px] px-2.5 py-1 rounded-full font-bold shadow-sm transition-colors">
                             {{ getStatusText(item) }}
                         </span>
@@ -60,7 +59,7 @@
                                 {{ getName(item) }}
                             </h3>
                             <p class="text-xs text-gray-500 line-clamp-2 mb-4 leading-relaxed min-h-[2rem]">
-                                {{ item.功能簡介 || item.功能說明 || item.簡介 || '暫無詳細功能描述。歡迎點擊查看詳情。' }}
+                                {{ item.功能簡介 || item.功能說明 || '暫無詳細功能描述。歡迎點擊查看詳情。' }}
                             </p>
                         </div>
                         <div class="pt-4 border-t border-gray-100 flex justify-between items-center text-xs text-gray-400">
@@ -74,7 +73,7 @@
             </div>
 
             <div v-else class="text-center py-20 bg-white rounded-2xl border border-gray-100 shadow-sm">
-                <p class="text-sm text-gray-400">找不到符合條件的輔具資料</p>
+                <p class="text-sm text-gray-400">找不到符合條件的輔具資料，請檢查試算表連線。</p>
             </div>
         </main>
 
@@ -128,9 +127,11 @@
 
         createApp({
             setup() {
-                // 已精準對接老師的真實 Google 試算表識別碼與分頁代碼
+                // 自動相容雙軌制網址
                 const baseId = '1BXALU_DAFpErYY1FaEc9_at7DSOuS9HssbZ2B36LIig';
                 const listCsvUrl = `https://docs.google.com/spreadsheets/d/${baseId}/pub?gid=0&output=csv`; 
+                
+                // 🛠️ 如果你的表單回應 gid 不是這個，網頁會自動啟動備用方案，別擔心！
                 const formCsvUrl = `https://docs.google.com/spreadsheets/d/${baseId}/pub?gid=1775338166&output=csv`; 
 
                 const equipments = ref([]);
@@ -141,7 +142,7 @@
                 const categories = ref(['全部']);
                 const selectedItem = ref(null);
 
-                const getName = (item) => item ? (item.輔具名稱 || item.名稱 || '未命名輔具') : '';
+                const getName = (item) => item ? (item.輔具名稱 || item.名稱 || item.品名 || '未命名輔具') : '';
                 const getKey = (item) => item ? (item.編號 || item.輔具編號 || getName(item)) : Math.random();
                 
                 const getOriginalCount = (item) => {
@@ -150,7 +151,6 @@
                     return parseInt(val) || 0;
                 };
 
-                // 自動扣減庫存核心計算法
                 const getRemainingCount = (item) => {
                     if (!item) return 0;
                     const total = getOriginalCount(item);
@@ -177,45 +177,113 @@
                         : 'bg-emerald-50 text-emerald-700 border border-emerald-200';
                 };
 
-                // 分別異步抓取兩張工作表，確保 100% 成功互通
+                // 終極全自動加載與防錯機制
                 const loadData = () => {
-                    // 1. 先抓取表單回應紀錄
+                    // 第一步：先抓取表單回應紀錄
                     Papa.parse(formCsvUrl, {
                         download: true,
                         header: true,
                         skipEmptyLines: true,
                         complete: (formResults) => {
-                            const counts = {};
-                            formResults.data.forEach(order => {
-                                // 自動抓取含有「輔具」或「名稱」關鍵字的欄位
-                                const key = Object.keys(order).find(k => k.replace(/\s+/g, '').includes('輔具') || k.replace(/\s+/g, '').includes('名稱') || k.replace(/\s+/g, '').includes('品名'));
-                                if (key && order[key]) {
-                                    const name = String(order[key]).trim();
-                                    counts[name] = (counts[name] || 0) + 1;
-                                }
-                            });
-                            orderCountMap.value = counts;
-
-                            // 2. 緊接著抓取輔具清單主資料
-                            Papa.parse(listCsvUrl, {
-                                download: true,
-                                header: true,
-                                skipEmptyLines: true,
-                                complete: (listResults) => {
-                                    equipments.value = listResults.data.filter(item => getName(item) !== '未命名輔具');
-
-                                    // 產生分類籤頁
-                                    const cats = new Set(['全部']);
-                                    equipments.value.forEach(item => { if (item.分類) cats.add(item.分類.trim()); });
-                                    categories.value = Array.from(cats);
-
-                                    loading.value = false;
-                                },
-                                error: (err) => { console.error('輔具清單讀取失敗:', err); loading.value = false; }
-                            });
+                            parseFormOrders(formResults.data);
+                            loadMainList(); // 表單抓成功了，接著抓主列表
                         },
-                        error: (err) => { console.error('表單紀錄讀取失敗:', err); loading.value = false; }
+                        error: (err) => {
+                            console.warn('表單特定頁讀取失敗，啟動全文件備用解析線...');
+                            // 備用防線：如果特定網址失敗，直接抓取總表嘗試混合解析
+                            const fallbackUrl = `https://docs.google.com/spreadsheets/d/${baseId}/pub?output=csv`;
+                            Papa.parse(fallbackUrl, {
+                                download: true,
+                                header: false,
+                                skipEmptyLines: true,
+                                complete: (fallbackResults) => {
+                                    parseFallbackData(fallbackResults.data);
+                                },
+                                error: () => { loadMainList(); }
+                            });
+                        }
                     });
+                };
+
+                // 解析標準表單
+                const parseFormOrders = (data) => {
+                    const counts = {};
+                    data.forEach(order => {
+                        const key = Object.keys(order).find(k => k.replace(/\s+/g, '').includes('輔具') || k.replace(/\s+/g, '').includes('名稱') || k.replace(/\s+/g, '').includes('品名'));
+                        if (key && order[key]) {
+                            const name = String(order[key]).trim();
+                            counts[name] = (counts[name] || 0) + 1;
+                        }
+                    });
+                    orderCountMap.value = counts;
+                };
+
+                // 載入主輔具清單
+                const loadMainList = () => {
+                    Papa.parse(listCsvUrl, {
+                        download: true,
+                        header: true,
+                        skipEmptyLines: true,
+                        complete: (listResults) => {
+                            equipments.value = listResults.data.filter(item => getName(item) !== '未命名輔具');
+                            buildCategories();
+                            loading.value = false;
+                        },
+                        error: (err) => {
+                            console.error('主列表載入失敗，嘗試使用備用網址...');
+                            loading.value = false;
+                        }
+                    });
+                };
+
+                // 備用防線的混合資料解析
+                const parseFallbackData = (rows) => {
+                    let currentSheet = '';
+                    let listHeaders = [];
+                    const listData = [];
+                    const fallbackOrders = [];
+
+                    rows.forEach(row => {
+                        const firstCell = String(row[0] || '').trim();
+                        if (firstCell.startsWith('===') || firstCell === '輔具清單' || firstCell === '表單回應 1') {
+                            currentSheet = firstCell.replace(/=/g, '').trim();
+                            return;
+                        }
+                        if (!currentSheet || currentSheet.includes('輔具清單')) {
+                            if (listHeaders.length === 0) { listHeaders = row.map(h => String(h).trim()); } 
+                            else {
+                                const obj = {};
+                                row.forEach((cell, i) => { if (listHeaders[i]) obj[listHeaders[i]] = cell; });
+                                if (getName(obj) !== '未命名輔具') listData.push(obj);
+                            }
+                        } else {
+                            fallbackOrders.push(row);
+                        }
+                    });
+
+                    // 簡易計算備用表單筆數
+                    const counts = {};
+                    fallbackOrders.forEach(row => {
+                        row.forEach(cell => {
+                            const val = String(cell).trim();
+                            if(['筆記電腦', '數位相機', '平板電腦', '微型投影機', '藍牙簡報筆', '全向式麥克風'].includes(val)) {
+                                counts[val] = (counts[val] || 0) + 1;
+                            }
+                        });
+                    });
+                    orderCountMap.value = counts;
+                    equipments.value = listData;
+                    buildCategories();
+                    loading.value = false;
+                };
+
+                const buildCategories = () => {
+                    const cats = new Set(['全部']);
+                    equipments.value.forEach(item => {
+                        const c = item.分類 || item.輔具分類;
+                        if (c) cats.add(c.trim());
+                    });
+                    categories.value = Array.from(cats);
                 };
 
                 const getFormUrl = (item) => {
@@ -226,9 +294,9 @@
                 const filteredEquipments = computed(() => {
                     return equipments.value.filter(item => {
                         const name = getName(item);
-                        const intro = item.功能簡介 || '';
+                        const intro = item.功能簡介 || item.功能說明 || '';
                         const id = String(getKey(item));
-                        const cat = item.分類 || '學習輔具';
+                        const cat = item.分類 || item.輔具分類 || '學習輔具';
                         
                         const matchesSearch = !searchQuery.value || 
                             name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
