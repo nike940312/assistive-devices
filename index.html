@@ -128,10 +128,10 @@
 
         createApp({
             setup() {
-                // 核心控制：利用 Google 試算表獨立的 gid 機制，精準分開下載兩張工作表，徹底根除錯位問題
+                // 已精準對接老師的真實 Google 試算表識別碼與分頁代碼
                 const baseId = '1BXALU_DAFpErYY1FaEc9_at7DSOuS9HssbZ2B36LIig';
-                const listCsvUrl = `https://docs.google.com/spreadsheets/d/${baseId}/pub?gid=0&output=csv`; // 輔具清單頁
-                const formCsvUrl = `https://docs.google.com/spreadsheets/d/${baseId}/pub?gid=1968846171&output=csv`; // 表單回應頁
+                const listCsvUrl = `https://docs.google.com/spreadsheets/d/${baseId}/pub?gid=0&output=csv`; 
+                const formCsvUrl = `https://docs.google.com/spreadsheets/d/${baseId}/pub?gid=1775338166&output=csv`; 
 
                 const equipments = ref([]);
                 const orderCountMap = ref({});
@@ -188,7 +188,7 @@
                             const counts = {};
                             formResults.data.forEach(order => {
                                 // 自動抓取含有「輔具」或「名稱」關鍵字的欄位
-                                const key = Object.keys(order).find(k => k.includes('輔具') || k.includes('名稱') || k.includes('品名'));
+                                const key = Object.keys(order).find(k => k.replace(/\s+/g, '').includes('輔具') || k.replace(/\s+/g, '').includes('名稱') || k.replace(/\s+/g, '').includes('品名'));
                                 if (key && order[key]) {
                                     const name = String(order[key]).trim();
                                     counts[name] = (counts[name] || 0) + 1;
