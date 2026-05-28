@@ -73,7 +73,7 @@
             </div>
 
             <div v-else class="text-center py-20 bg-white rounded-2xl border border-gray-100 shadow-sm">
-                <p class="text-sm text-gray-400">尚未載入輔具資料，請確保已完成下方共用設定步驟。</p>
+                <p class="text-sm text-gray-400">尚未載入輔具資料，請確保 Google 試算表具備連結檢視權限。</p>
             </div>
         </main>
 
@@ -127,12 +127,9 @@
 
         createApp({
             setup() {
-                // 🚀 使用最穩定的 Google 可視化大數據直連通道，完美突破 CSV 的讀取防火牆
+                // Google 可視化大數據直連通道設定
                 const spreadsheetId = '1BXALU_DAFpErYY1FaEc9_at7DSOuS9HssbZ2B36LIig';
-                
-                // 第一張表：輔具清單 (tq=select%20*)
                 const listUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tq=select%20*&sheet=%E8%BC%94%E5%85%B7%E6%B8%85%E5%96%AE`;
-                // 第二張表：表單回應 1
                 const formUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tq=select%20*&sheet=%E8%A1%A8%E5%96%AE%E5%9B%9E%E6%87%89%201`;
 
                 const equipments = ref([]);
@@ -174,16 +171,15 @@
 
                 const getFormUrl = (item) => item && item.預約表單 ? item.預約表單.trim() : 'https://forms.google.com';
 
-                // 直連解析核心
+                // API 直連與去空格防呆核心
                 const loadDataFromServer = async () => {
                     try {
                         // 1. 先抓輔具主清單
                         const resList = await fetch(listUrl);
                         const textList = await resList.text();
-                        // 處理 Google 回傳的 google.visualization.Query.setResponse 封裝格式
                         const jsonList = JSON.parse(textList.substring(textList.indexOf('{'), textList.lastIndexOf('}') + 1));
                         
-                        const columns = jsonList.table.cols.map(c => c.label ? c.label.trim() : '');
+                        const columns = jsonList.table.cols.map(c => c.label ? c.label.trim().replace(/\s+/g, '') : '');
                         const listData = jsonList.table.rows.map(row => {
                             const item = {};
                             row.c.forEach((cell, i) => {
@@ -193,47 +189,62 @@
                             return item;
                         });
 
-                        // 欄位防呆映射補強
-                        equipments.value = listData.map(d => ({
-                            編號: d.編號 || d.輔具編號 || '',
-                            輔具名稱: d.輔具名稱 || d.名稱 || d.品名 || '',
-                            分類: d.分類 || d.輔具分類 || '學習輔具',
-                            功能簡介: d.功能簡介 || d.功能說明 || '',
-                            適用對象: d.適用對象 || '資源教室學生',
-                            保管位置: d.保管位置 || d.存放位置 || '資源教室',
-                            照片: d.輔具照片 || d.照片 || d.圖片 || '',
-                            數量: d.數量 || d.總數量 || d.可借數量 || '0',
-                            預約表單: d.預約表單 || d.google表單 || d.Google表單 || ''
-                        })).filter(e => e.輔具名稱 !== '');
+                        // 智慧欄位映射
+                        equipments.value = listData.map(d => {
+                            const nameKey = Object.keys(d).find(k => k.includes('名稱') || k.includes('品名') || k.includes('輔具')) || '輔具名稱';
+                            const countKey = Object.keys(d).find(k => k.includes('數量') || k.includes('總數')) || '數量';
+                            const catKey = Object.keys(d).find(k => k.includes('分類')) || '分類';
+                            const introKey = Object.keys(d).find(k => k.includes('簡介') || k.includes('說明')) || '功能簡介';
+                            const locKey = Object.keys(d).find(k => k.includes('位置') || k.includes('存放')) || '保管位置';
+                            const imgKey = Object.keys(d).find(k => k.includes('照片') || k.includes('圖片')) || '照片';
+                            const formKey = Object.keys(d).find(k => k.includes('表單') || k.includes('url')) || '預約表單';
 
-                        // 生成分頁頁籤
+                            return {
+                                編號: d.編號 || d.輔具編號 || String(d[nameKey]),
+                                輔具名稱: d[nameKey] || '',
+                                分類: d[catKey] || '學習輔具',
+                                功能簡介: d[introKey] || '暫無詳細功能描述。歡迎點擊查看詳情。',
+                                適用對象: d.適用對象 || '資源教室學生',
+                                保管位置: d[locKey] || '資源教室',
+                                照片: d[imgKey] || '',
+                                數量: d[countKey] || '0',
+                                預約表單: d[formKey] || ''
+                            };
+                        }).filter(e => e.輔具名稱 !== '');
+
+                        // 生成分類籤頁
                         const cats = new Set(['全部']);
-                        equipments.value.forEach(e => { if (e.分類) cats.add(e.分類); });
+                        equipments.value.forEach(e => { if (e.分類) cats.add(e.分類.trim()); });
                         categories.value = Array.from(cats);
 
-                        // 2. 緊接著抓表單回應
+                        // 2. 抓取表單回應（含地毯式自動歸零重置防呆）
                         try {
                             const resForm = await fetch(formUrl);
                             const textForm = await resForm.text();
                             const jsonForm = JSON.parse(textForm.substring(textForm.indexOf('{'), textForm.lastIndexOf('}') + 1));
                             
-                            const formCols = jsonForm.table.cols.map(c => c.label ? c.label.trim() : '');
+                            const formCols = jsonForm.table.cols.map(c => c.label ? c.label.trim().replace(/\s+/g, '') : '');
                             const counts = {};
 
-                            jsonForm.table.rows.forEach(row => {
-                                row.c.forEach((cell, i) => {
-                                    const colName = formCols[i] || '';
-                                    if (colName.includes('輔具') || colName.includes('名稱') || colName.includes('品名')) {
-                                        if (cell && cell.v) {
-                                            const name = String(cell.v).trim();
-                                            counts[name] = (counts[name] || 0) + 1;
+                            // 檢查：如果試算表內「列資料」已被完全刪除，則不執行累加，直接讓 counts 保持為空
+                            if (jsonForm.table.rows && jsonForm.table.rows.length > 0) {
+                                jsonForm.table.rows.forEach(row => {
+                                    if (!row || !row.c) return;
+                                    row.c.forEach((cell, i) => {
+                                        const colName = formCols[i] || '';
+                                        if (colName.includes('輔具') || colName.includes('名稱') || colName.includes('品名')) {
+                                            if (cell && cell.v) {
+                                                const name = String(cell.v).trim();
+                                                counts[name] = (counts[name] || 0) + 1;
+                                            }
                                         }
-                                    }
+                                    });
                                 });
-                            });
+                            }
                             orderCountMap.value = counts;
                         } catch (err) {
-                            console.warn('表單回應載入失敗，略過扣庫存步驟:', err);
+                            console.warn('表單回應為空或讀取失敗，已自動重置庫存扣減額:', err);
+                            orderCountMap.value = {};
                         }
 
                     } catch (error) {
