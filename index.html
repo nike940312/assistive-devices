@@ -8,7 +8,6 @@
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <style>
-        /* 防止 Vue 載入前的語法外露閃爍 */
         [v-cloak] { display: none !important; }
     </style>
 </head>
@@ -39,7 +38,7 @@
 
             <div v-if="loading" class="text-center py-20">
                 <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-300 border-t-[#2C4A3E] mb-4"></div>
-                <p class="text-sm text-gray-500 tracking-widest">正在同步更新雲端輔具資料...</p>
+                <p class="text-sm text-gray-500 tracking-widest">正在同步更新雲端輔具與預約紀錄...</p>
             </div>
 
             <div v-else-if="filteredEquipments.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -55,17 +54,17 @@
                     <div class="p-5 flex-1 flex flex-col justify-between">
                         <div>
                             <span class="text-[10px] text-gray-400 font-bold tracking-widest block mb-1 uppercase">
-                                {{ item.分類 || item.輔具分類 || item.類別 || '學習輔具' }}
+                                {{ item.分類 || item.輔具分類 || '學習輔具' }}
                             </span>
                             <h3 class="text-base font-bold text-gray-900 mb-2 line-clamp-1 group-hover:text-[#2C4A3E] transition-colors">
                                 {{ getName(item) }}
                             </h3>
                             <p class="text-xs text-gray-500 line-clamp-2 mb-4 leading-relaxed min-h-[2rem]">
-                                {{ item.功能簡介 || item.功能說明 || item.簡介 || item.說明 || '暫無詳細功能描述。歡迎點擊查看詳情。' }}
+                                {{ item.功能簡介 || item.功能說明 || item.簡介 || '暫無詳細功能描述。歡迎點擊查看詳情。' }}
                             </p>
                         </div>
                         <div class="pt-4 border-t border-gray-100 flex justify-between items-center text-xs text-gray-400">
-                            <span>位置：{{ item.保管位置 || item.存放位置 || item.位置 || item.地點 || '資源教室' }}</span>
+                            <span>位置：{{ item.保管位置 || item.存放位置 || item.位置 || '資源教室' }}</span>
                             <button @click="openModal(item)" class="text-[#2C4A3E] font-semibold hover:underline flex items-center gap-1">
                                 查看詳情 ➔
                             </button>
@@ -89,31 +88,25 @@
 
                 <div class="p-6">
                     <div class="flex items-center gap-2 mb-2">
-                        <span class="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded font-mono">
-                            {{ getKey(selectedItem) }}
-                        </span>
-                        <span class="text-xs text-gray-400">
-                            {{ selectedItem.分類 || selectedItem.輔具分類 || selectedItem.類別 || '學習輔具' }}
-                        </span>
+                        <span class="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded font-mono">{{ getKey(selectedItem) }}</span>
+                        <span class="text-xs text-gray-400">{{ selectedItem.分類 || '學習輔具' }}</span>
                     </div>
-                    <h2 class="text-xl font-bold text-gray-900 mb-3">
-                        {{ getName(selectedItem) }}
-                    </h2>
+                    <h2 class="text-xl font-bold text-gray-900 mb-3">{{ getName(selectedItem) }}</h2>
                     <p class="text-sm text-gray-600 leading-relaxed mb-4 whitespace-pre-line">
-                        {{ selectedItem.功能簡介 || selectedItem.功能說明 || selectedItem.簡介 || selectedItem.說明 || '暫無詳細功能簡介。如有借用需求，請向資源教室老師洽詢確認。' }}
+                        {{ selectedItem.功能簡介 || selectedItem.功能說明 || selectedItem.簡介 || '暫無詳細功能簡介。如有借用需求，請向資源教室老師洽詢確認。' }}
                     </p>
                     
                     <div class="bg-gray-50 p-4 rounded-xl text-xs text-gray-500 space-y-1.5 mb-6">
-                        <div><strong>適用對象：</strong> {{ selectedItem.適用對象 || selectedItem.對象 || '資源教室同學' }}</div>
-                        <div><strong>存放位置：</strong> {{ selectedItem.保管位置 || selectedItem.存放位置 || selectedItem.位置 || selectedItem.地點 || '資源教室' }}</div>
+                        <div><strong>適用對象：</strong> {{ selectedItem.適用對象 || '資源教室學生' }}</div>
+                        <div><strong>存放位置：</strong> {{ selectedItem.保管位置 || selectedItem.存放位置 || '資源教室' }}</div>
                         <div>
                             <strong>目前狀態：</strong> 
-                            <span :class="isDisable(selectedItem) ? 'text-rose-600 font-bold' : 'text-green-600 font-bold'">
-                                {{ getStatusText(selectedItem) }}
+                            <span :class="getRemainingCount(selectedItem) <= 0 ? 'text-rose-600 font-bold' : 'text-green-600 font-bold'">
+                                {{ getRemainingCount(selectedItem) <= 0 ? '已借出' : '可借用' }}
                             </span>
                         </div>
-                        <div v-if="getCount(selectedItem)">
-                            <strong>總數量：</strong> {{ getCount(selectedItem) }} 台
+                        <div>
+                            <strong>庫存概況：</strong> 剩餘 <span class="font-bold text-sm text-gray-800">{{ getRemainingCount(selectedItem) }}</span> 台 / 總共 {{ getOriginalCount(selectedItem) }} 台
                         </div>
                     </div>
 
@@ -135,108 +128,138 @@
 
         createApp({
             setup() {
+                // 🛠️ 1. 請在此處替換為「發布整個文件」後的全新 CSV 網址 🛠️
                 const googleSheetCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vStcS8WMjqJqGAhvOg0bPczxCgnGKpZWGU7r6t_XHrKFsxL6v_5gNUdvhf7ZhX4t13mOTrfVQ0Tx6JZ/pub?output=csv';
 
                 const equipments = ref([]);
+                const orderCountMap = ref({}); // 用來存放每項輔具被預約的累計次數
                 const loading = ref(true);
                 const searchQuery = ref('');
                 const currentCategory = ref('全部');
                 const categories = ref(['全部']);
                 const selectedItem = ref(null);
 
-                // 統一清洗欄位鍵名（防空白、防大小寫）
-                const getCleanItem = (item) => {
-                    if (!item) return {};
-                    const cleaned = {};
-                    Object.keys(item).forEach(key => {
-                        cleaned[key.trim().replace(/\s+/g, '')] = String(item[key]).trim();
-                    });
-                    return cleaned;
+                const getName = (item) => item ? (item.輔具名稱 || item.名稱 || '未命名輔具') : '';
+                const getKey = (item) => item ? (item.編號 || item.輔具編號 || getName(item)) : Math.random();
+                
+                // 取得原始總數量
+                const getOriginalCount = (item) => {
+                    if (!item) return 0;
+                    const val = item.數量 || item.總數量 || item.可借數量 || 0;
+                    return parseInt(val) || 0;
                 };
 
-                const getName = (item) => {
-                    const c = getCleanItem(item);
-                    return c.輔具名稱 || c.名稱 || c.品名 || '未命名輔具';
-                };
-
-                const getKey = (item) => {
-                    const c = getCleanItem(item);
-                    return c.編號 || c.輔具編號 || c.id || c.ID || getName(item);
-                };
-
-                const getCount = (item) => {
-                    const c = getCleanItem(item);
-                    return c.數量 || c.總數量 || c.可借數量 || c.剩餘數量 || '';
+                // 【網頁端核心全自動扣減庫存邏輯】
+                const getRemainingCount = (item) => {
+                    if (!item) return 0;
+                    const total = getOriginalCount(item);
+                    const name = getName(item);
+                    const rented = orderCountMap.value[name] || 0; // 找出表單裡這個名字被填了幾次
+                    const remaining = total - rented;
+                    return remaining < 0 ? 0 : remaining;
                 };
 
                 const getImgUrl = (item) => {
-                    const c = getCleanItem(item);
-                    const img = c.照片 || c.輔具照片 || c.圖片 || c.連結 || c.網址;
-                    if (img && img.startsWith('http')) return img;
-                    return 'https://images.unsplash.com/photo-1468495244123-6c6c332eeece?w=600'; 
+                    if (!item) return 'https://images.unsplash.com/photo-1468495244123-6c6c332eeece?w=600';
+                    const img = item.照片 || item.輔具照片 || item.圖片;
+                    return (img && img.startsWith('http')) ? img : 'https://images.unsplash.com/photo-1468495244123-6c6c332eeece?w=600';
                 };
 
                 const getStatusText = (item) => {
-                    const c = getCleanItem(item);
-                    if (c.狀態 || c.目前狀態 || c.借用狀態) {
-                        return c.狀態 || c.目前狀態 || c.借用狀態;
-                    }
-                    const count = getCount(item);
-                    if (count === '0' || count === 0) return '已借出';
-                    return '可借用';
-                };
-
-                const isDisable = (item) => {
-                    const status = getStatusText(item);
-                    return ['已借出', '缺貨中', '維修中', '不可借用', '0'].includes(status);
+                    const remaining = getRemainingCount(item);
+                    return remaining <= 0 ? '已借出' : `${remaining} 台`;
                 };
 
                 const getStatusClass = (item) => {
-                    return isDisable(item) 
+                    return getRemainingCount(item) <= 0 
                         ? 'bg-rose-50 text-rose-700 border border-rose-200' 
                         : 'bg-emerald-50 text-emerald-700 border border-emerald-200';
                 };
 
+                // 多分頁同時抓取與動態解析
                 const fetchData = () => {
                     Papa.parse(googleSheetCsvUrl, {
                         download: true,
-                        header: true,
+                        header: false, // 改用陣列模式讀取，防範工作表錯位
                         skipEmptyLines: true,
                         complete: (results) => {
-                            equipments.value = results.data.filter(item => {
-                                return Object.values(item).some(val => val && String(val).trim() !== '');
-                            });
+                            const rows = results.data;
+                            let currentSheet = '';
+                            let listHeaders = [];
+                            let formHeaders = [];
                             
-                            const cats = new Set(['全部']);
-                            equipments.value.forEach(item => {
-                                const c = getCleanItem(item);
-                                const catName = c.分類 || c.輔具分類 || c.類別;
-                                if(catName) cats.add(catName);
+                            const listData = [];
+                            const formRows = [];
+
+                            // 解析 Google 活頁簿合併輸出格式
+                            rows.forEach(row => {
+                                const firstCell = String(row[0] || '').trim();
+                                
+                                // 偵測到新工作表的標頭標記
+                                if (firstCell.startsWith('===') || firstCell === '輔具清單' || firstCell === '表單回應 1') {
+                                    currentSheet = firstCell.replace(/=/g, '').trim();
+                                    return;
+                                }
+
+                                if (!currentSheet || currentSheet.includes('輔具清單')) {
+                                    if (listHeaders.length === 0) {
+                                        listHeaders = row.map(h => String(h).trim());
+                                    } else {
+                                        const obj = {};
+                                        row.forEach((cell, i) => { if (listHeaders[i]) obj[listHeaders[i]] = cell; });
+                                        if (obj.輔具名稱 || obj.編號) listData.push(obj);
+                                    }
+                                } else if (currentSheet.includes('表單回應')) {
+                                    if (formHeaders.length === 0) {
+                                        formHeaders = row.map(h => String(h).trim());
+                                    } else {
+                                        const obj = {};
+                                        row.forEach((cell, i) => { if (formHeaders[i]) obj[formHeaders[i]] = cell; });
+                                        formRows.push(obj);
+                                    }
+                                }
                             });
+
+                            // 計算表單中，每項輔具名稱被填寫了幾次
+                            const counts = {};
+                            formRows.forEach(order => {
+                                // 模糊匹配：自動尋找含有「輔具」或「名稱」或「品名」的預約欄位
+                                const key = Object.keys(order).find(k => k.includes('輔具') || k.includes('名稱') || k.includes('品名'));
+                                if (key && order[key]) {
+                                    const aidName = String(order[key]).trim();
+                                    counts[aidName] = (counts[aidName] || 0) + 1;
+                                }
+                            });
+                            orderCountMap.value = counts;
+
+                            // 導入輔具清單
+                            equipments.value = listData;
+
+                            // 自動分析分類頁籤
+                            const cats = new Set(['全部']);
+                            equipments.value.forEach(item => { if (item.分類) cats.add(item.分類.trim()); });
                             categories.value = Array.from(cats);
+                            
                             loading.value = false;
                         },
-                        error: (error) => {
-                            console.error('讀取試算表失敗:', error);
+                        error: (err) => {
+                            console.error('資料同步失敗:', err);
                             loading.value = false;
                         }
                     });
                 };
 
                 const getFormUrl = (item) => {
-                    const c = getCleanItem(item);
-                    const url = c.預約表單 || c.google表單 || c.Google表單 || c.表單網址 || c.表單連結 || c.申請連結;
-                    if (url && url.startsWith('http')) return url;
-                    return 'https://forms.google.com';
+                    const url = item ? (item.預約表單 || item.google表單 || item.Google表單) : '';
+                    return (url && url.startsWith('http')) ? url.trim() : 'https://forms.google.com';
                 };
 
                 const filteredEquipments = computed(() => {
                     return equipments.value.filter(item => {
                         const name = getName(item);
-                        const c = getCleanItem(item);
-                        const intro = c.功能簡介 || c.功能說明 || c.簡介 || c.說明 || '';
+                        const intro = item.功能簡介 || '';
                         const id = String(getKey(item));
-                        const cat = c.分類 || c.輔具分類 || c.類別 || '學習輔具';
+                        const cat = item.分類 || '學習輔具';
                         
                         const matchesSearch = !searchQuery.value || 
                             name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
@@ -253,7 +276,7 @@
                 onMounted(() => { fetchData(); });
 
                 return {
-                    loading, searchQuery, currentCategory, categories, selectedItem, filteredEquipments, getFormUrl, getStatusClass, openModal, getName, getKey, getCount, getImgUrl, getStatusText, isDisable
+                    loading, searchQuery, currentCategory, categories, selectedItem, filteredEquipments, getFormUrl, getStatusClass, openModal, getName, getKey, getOriginalCount, getRemainingCount, getImgUrl, getStatusText
                 };
             }
         }).mount('#app');
