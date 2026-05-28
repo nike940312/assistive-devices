@@ -172,12 +172,11 @@
 
                 const loadDataFromServer = async () => {
                     try {
-                        // 1. 抓取輔具主清單
+                        // 1. 讀取輔具清單主表
                         const resList = await fetch(listUrl);
                         const textList = await resList.text();
                         const jsonList = JSON.parse(textList.substring(textList.indexOf('{'), textList.lastIndexOf('}') + 1));
                         
-                        // ❌ 不再使用模糊自動搜尋，改用精準位置對對碰
                         const rawCols = jsonList.table.cols;
                         const listData = jsonList.table.rows.map(row => {
                             const item = {};
@@ -188,7 +187,6 @@
                             return item;
                         });
 
-                        // 🎯 這裡直接強制手動對齊你的試算表名稱（解決名稱變編號的問題）
                         equipments.value = listData.map(d => ({
                             編號: d['編號'] || d['輔具編號'] || '',
                             輔具名稱: d['輔具名稱'] || d['名稱'] || d['品名'] || '',
@@ -201,32 +199,30 @@
                             預約表單: d['預約表單'] || d['Google表單'] || ''
                         })).filter(e => e.輔具名稱 !== '');
 
-                        // 生成分類分頁
                         const cats = new Set(['全部']);
                         equipments.value.forEach(e => { if (e.分類) cats.add(e.分類.trim()); });
                         categories.value = Array.from(cats);
 
-                        // 2. 抓取表單回應（加入極限空表歸零防禦機制）
+                        // 2. 讀取表單回應（改用盲掃機制，杜絕幽靈欄位扣數）
                         try {
                             const resForm = await fetch(formUrl);
                             const textForm = await resForm.text();
                             const jsonForm = JSON.parse(textForm.substring(textForm.indexOf('{'), textForm.lastIndexOf('}') + 1));
                             
                             const counts = {};
+                            // 先行幫清單中所有合法的輔具名稱初始化為 0 
+                            equipments.value.forEach(e => { counts[e.輔具名稱.trim()] = 0; });
 
-                            // 🔍 如果表單被全數刪除，jsonForm.table.rows 會是空的或不存在，直接略過累加，counts 就會保持全空（庫存即恢復全滿）
+                            // 🔍 全螢幕盲掃：不對特定欄位，只找整張表有沒有出現對應的輔具名稱
                             if (jsonForm.table && jsonForm.table.rows && jsonForm.table.rows.length > 0) {
-                                const formCols = jsonForm.table.cols.map(c => c.label ? c.label.trim() : '');
-                                
                                 jsonForm.table.rows.forEach(row => {
                                     if (!row || !row.c) return;
-                                    row.c.forEach((cell, i) => {
-                                        const colName = formCols[i] || '';
-                                        // 尋找表單中對應填寫「輔具名稱」的欄位
-                                        if (colName === '請選擇你要借用的輔具名稱' || colName.includes('輔具名稱') || colName === '輔具名稱') {
-                                            if (cell && cell.v) {
-                                                const name = String(cell.v).trim();
-                                                counts[name] = (counts[name] || 0) + 1;
+                                    row.c.forEach(cell => {
+                                        if (cell && cell.v) {
+                                            const cellValue = String(cell.v).trim();
+                                            // 如果格子的內容正好符合我們主清單中的某一項輔具名稱，才算借出
+                                            if (counts[cellValue] !== undefined) {
+                                                counts[cellValue]++;
                                             }
                                         }
                                     });
@@ -235,12 +231,12 @@
                             
                             orderCountMap.value = counts;
                         } catch (err) {
-                            console.warn('表單可能完全清空，已將所有申請計數安全歸零:', err);
+                            console.warn('表單回應完全為空，庫存計數已全部安全重置:', err);
                             orderCountMap.value = {};
                         }
 
                     } catch (error) {
-                        console.error('資料傳輸中斷:', error);
+                        console.error('資料同步發生異常:', error);
                     } finally {
                         loading.value = false;
                     }
