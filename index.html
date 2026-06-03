@@ -1,291 +1,47 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>大專資源教室 - 學習輔具線上清單</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <style>
-        [v-cloak] { display: none !important; }
-    </style>
-</head>
-<body class="bg-[#F9F6F0] text-gray-800 font-sans m-0 p-0">
+// 重新精簡並嚴謹化篩選邏輯
+const loadData = async () => {
+    try {
+        // 1. 抓取表單回應資料
+        const resForm = await fetch(formUrl);
+        const textForm = await resForm.text();
+        const jsonForm = JSON.parse(textForm.substring(textForm.indexOf('{'), textForm.lastIndexOf('}') + 1));
+        const rawFormRows = jsonForm.table.rows || [];
 
-    <div id="app" v-cloak class="min-h-screen flex flex-col">
-        <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
-            <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div class="text-center sm:text-left">
-                    <h1 class="text-xl font-bold tracking-widest text-[#2C4A3E] uppercase">Resource Classroom Learning Aid Resource Network</h1>
-                    <p class="text-xs text-gray-400 tracking-wider mt-0.5">資源教室學習輔具資源網</p>
-                </div>
-                <div class="w-full sm:w-72">
-                    <input type="text" v-model="searchQuery" placeholder="搜尋輔具名稱..." 
-                           class="w-full px-4 py-2 rounded-full bg-gray-100 text-sm border-0 focus:ring-2 focus:ring-[#2C4A3E] focus:bg-white transition-all">
-                </div>
-            </div>
-        </header>
+        // 2. 讀取輔具清單主表
+        const resList = await fetch(listUrl);
+        const textList = await resList.text();
+        const jsonList = JSON.parse(textList.substring(textList.indexOf('{'), textList.lastIndexOf('}') + 1));
+        const rows = jsonList.table.rows;
+        const cols = jsonList.table.cols;
 
-        <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-8">
-            <div class="flex flex-wrap justify-center gap-2 mb-8">
-                <button v-for="cat in categories" :key="cat" @click="currentCategory = cat"
-                        :class="currentCategory === cat ? 'bg-[#2C4A3E] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
-                        class="px-4 py-1.5 rounded-full text-xs font-medium transition-all shadow-sm border border-gray-100">
-                    {{ cat === '全部' ? 'ALL. 全部輔具' : cat }}
-                </button>
-            </div>
+        equipments.value = rows.map(row => {
+            let item = {};
+            row.c.forEach((cell, i) => {
+                const label = cols[i].label.trim();
+                item[label] = cell ? String(cell.v).trim() : '';
+            });
 
-            <div v-if="loading" class="text-center py-20">
-                <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-300 border-t-[#2C4A3E] mb-4"></div>
-                <p class="text-sm text-gray-500 tracking-widest">正在即時同步雲端庫存與借閱紀錄...</p>
-            </div>
+            const name = item['輔具名稱']; // 確保這裡與試算表欄位名稱完全一致
+            const total = parseInt(item['數量']) || 0;
 
-            <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div v-for="item in filteredEquipments" :key="item.name" 
-                     class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all border border-gray-100 flex flex-col group">
-                    <div class="relative aspect-[4/3] bg-gray-100 overflow-hidden">
-                        <img :src="item.img" :alt="item.name" class="w-full h-full object-cover group-hover:scale-103 transition-transform duration-500">
-                        <span :class="item.remaining <= 0 ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'" 
-                              class="absolute top-3 right-3 text-[10px] px-2.5 py-1 rounded-full font-bold shadow-sm border">
-                            {{ item.remaining <= 0 ? '已借出' : `剩餘 ${item.remaining} 台 / 總共 ${item.total} 台` }}
-                        </span>
-                    </div>
-                    <div class="p-5 flex-1 flex flex-col justify-between">
-                        <div>
-                            <span class="text-[10px] text-gray-400 font-bold tracking-widest block mb-1 uppercase">
-                                {{ item.category }}
-                            </span>
-                            <h3 class="text-base font-bold text-gray-900 mb-2 line-clamp-1 group-hover:text-[#2C4A3E] transition-colors">
-                                {{ item.name }}
-                            </h3>
-                            <p class="text-xs text-gray-500 line-clamp-2 mb-4 leading-relaxed min-h-[2rem]">
-                                {{ item.desc }}
-                            </p>
-                        </div>
-                        <div class="pt-4 border-t border-gray-100 flex justify-between items-center text-xs text-gray-400">
-                            <span>位置：{{ item.location }}</span>
-                            <button @click="openModal(item)" class="text-[#2C4A3E] font-semibold hover:underline flex items-center gap-1">
-                                查看詳情 ➔
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
+            // 嚴格計算：只計算「借用輔具名稱」這一欄內容「完全等於」該輔具名稱的次數
+            let rentedCount = 0;
+            rawFormRows.forEach(fRow => {
+                // 假設您的表單中「借用輔具名稱」是第 5 欄 (索引 4，請依實際情況調整)
+                const rentedName = fRow.c[4] ? String(fRow.c[4].v).trim() : '';
+                if (rentedName === name) {
+                    rentedCount++;
+                }
+            });
 
-        <div v-if="selectedItem" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" @click.self="selectedItem = null">
-            <div class="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl relative">
-                <button @click="selectedItem = null" class="absolute top-4 right-4 bg-white/80 hover:bg-white text-gray-700 w-8 h-8 rounded-full flex items-center justify-center transition-all z-10">✕</button>
-
-                <div class="relative aspect-video bg-gray-100">
-                    <img :src="selectedItem.img" :alt="selectedItem.name" class="w-full h-full object-cover">
-                </div>
-
-                <div class="p-6">
-                    <div class="flex items-center gap-2 mb-2">
-                        <span class="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded font-mono">編號：{{ selectedItem.id }}</span>
-                        <span class="text-xs text-gray-400">{{ selectedItem.category }}</span>
-                    </div>
-                    <h2 class="text-xl font-bold text-gray-900 mb-3">{{ selectedItem.name }}</h2>
-                    <p class="text-sm text-gray-600 leading-relaxed mb-4 whitespace-pre-line">{{ selectedItem.desc }}</p>
-                    
-                    <div class="bg-gray-50 p-4 rounded-xl text-xs text-gray-500 space-y-1.5 mb-6">
-                        <div><strong>存放位置：</strong> {{ selectedItem.location }}</div>
-                        <div>
-                            <strong>目前狀態：</strong> 
-                            <span :class="selectedItem.remaining <= 0 ? 'text-rose-600 font-bold' : 'text-green-600 font-bold'">
-                                {{ selectedItem.remaining <= 0 ? '已借出' : '可借用' }}
-                            </span>
-                        </div>
-                        <div>
-                            <strong>庫存概況：</strong> 剩餘 <span class="font-bold text-sm text-gray-800">{{ selectedItem.remaining }}</span> 台 / 總共 {{ selectedItem.total }} 台
-                        </div>
-                    </div>
-
-                    <a :href="selectedItem.form" target="_blank"
-                       class="block w-full text-center bg-[#2C4A3E] hover:bg-[#1E332B] text-white text-sm font-medium py-3 rounded-xl transition-all shadow-sm tracking-widest font-semibold">
-                        線上申請預約借用
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <footer class="bg-white border-t border-gray-100 py-6 text-center text-xs text-gray-400 tracking-wider">
-            &copy; 2026 大專校院資源教室. All Rights Reserved.
-        </footer>
-    </div>
-
-    <script>
-        const { createApp, ref, computed, onMounted } = Vue;
-
-        createApp({
-            setup() {
-                const spreadsheetId = '1BXALU_DAFpErYY1FaEc9_at7DSOuS9HssbZ2B36LIig';
-                const listUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tq=select%20*&sheet=%E8%BC%94%E5%85%B7%E6%B8%85%E5%96%AE`;
-                const formUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tq=select%20*&sheet=%E8%A1%A8%E5%96%AE%E5%9B%9E%E6%87%89%201`;
-
-                const equipments = ref([]);
-                const loading = ref(true);
-                const searchQuery = ref('');
-                const currentCategory = ref('全部');
-                const categories = ref(['全部']);
-                const selectedItem = ref(null);
-
-                const loadData = async () => {
-                    try {
-                        // 1. 讀取表單回應並精確計算各個輔具編號的借出次數
-                        let rentCounts = {};
-                        try {
-                            const resForm = await fetch(formUrl);
-                            const textForm = await resForm.text();
-                            const jsonForm = JSON.parse(textForm.substring(textForm.indexOf('{'), textForm.lastIndexOf('}') + 1));
-                            
-                            if (jsonForm.table && jsonForm.table.rows) {
-                                // 🌟 尋找「輔具編號」在表單回應工作表中的確切欄位索引
-                                let formTargetColIdx = -1;
-                                jsonForm.table.cols.forEach((col, idx) => {
-                                    const lbl = col.label ? col.label.trim() : '';
-                                    if (lbl.includes('編號') || lbl.includes('名稱') || lbl.includes('品名')) {
-                                        formTargetColIdx = idx;
-                                    }
-                                });
-                                // 如果沒對到標籤，預設為第 6 欄 (索引 5，即欄位 F)
-                                if (formTargetColIdx === -1) formTargetColIdx = 5;
-
-                                // 統計每種編號被填寫的次數
-                                jsonForm.table.rows.forEach((row, rowIndex) => {
-                                    if (rowIndex === 0 || !row || !row.c) return; // 跳過標題列
-                                    const cell = row.c[formTargetColIdx];
-                                    if (cell && cell.v !== null && cell.v !== undefined) {
-                                        const val = String(cell.v).trim();
-                                        if (val) {
-                                            rentCounts[val] = (rentCounts[val] || 0) + 1;
-                                        }
-                                    }
-                                });
-                            }
-                        } catch (e) { console.log("目前表單無資料或連線異常", e); }
-
-                        // 2. 讀取輔具清單主表
-                        const resList = await fetch(listUrl);
-                        const textList = await resList.text();
-                        const jsonList = JSON.parse(textList.substring(textList.indexOf('{'), textList.lastIndexOf('}') + 1));
-                        
-                        const rows = jsonList.table.rows;
-                        const cols = jsonList.table.cols;
-
-                        // 🌟 動態掃描主表的欄位位置，徹底防止欄位錯位問題
-                        let idIdx = cols.findIndex(c => c.label && c.label.trim().includes('編號'));
-                        let catIdx = cols.findIndex(c => c.label && c.label.trim().includes('分類'));
-                        let nameIdx = cols.findIndex(c => c.label && c.label.trim().includes('名稱'));
-                        let descIdx = cols.findIndex(c => c.label && (c.label.trim().includes('功能') || c.label.trim().includes('簡介')));
-                        let qtyIdx = cols.findIndex(c => c.label && c.label.trim().includes('數量'));
-                        let locIdx = cols.findIndex(c => c.label && c.label.trim().includes('位置'));
-                        let imgIdx = cols.findIndex(c => c.label && c.label.trim().includes('照片'));
-                        let formIdx = cols.findIndex(c => c.label && c.label.trim().includes('表單'));
-
-                        // 嚴格保底索引（若對不到標籤則採用標準發布順序）
-                        if (idIdx === -1) idIdx = 0;
-                        if (catIdx === -1) catIdx = 1;
-                        if (nameIdx === -1) nameIdx = 2;
-                        if (descIdx === -1) descIdx = 3;
-                        if (qtyIdx === -1) qtyIdx = 4;
-                        if (locIdx === -1) locIdx = 5;
-                        if (imgIdx === -1) imgIdx = 6;
-                        if (formIdx === -1) formIdx = 7;
-
-                        equipments.value = rows.map(row => {
-                            if (!row || !row.c) return null;
-                            
-                            const id = row.c[idIdx] && row.c[idIdx].v !== null ? String(row.c[idIdx].v).trim() : '';
-                            const name = row.c[nameIdx] && row.c[nameIdx].v !== null ? String(row.c[nameIdx].v).trim() : '';
-                            if (!name) return null;
-
-                            const category = row.c[catIdx] && row.c[catIdx].v !== null ? String(row.c[catIdx].v).trim() : '學習輔具';
-                            const desc = row.c[descIdx] && row.c[descIdx].v !== null ? String(row.c[descIdx].v).trim() : '暫無功能描述。';
-                            const location = row.c[locIdx] && row.c[locIdx].v !== null ? String(row.c[locIdx].v).trim() : '資源教室';
-                            const rawImg = row.c[imgIdx] && row.c[imgIdx].v !== null ? String(row.c[imgIdx].v).trim() : '';
-                            const formUrlField = row.c[formIdx] && row.c[formIdx].v !== null ? String(row.c[formIdx].v).trim() : 'https://forms.google.com';
-
-                            // 提取總數量
-                            let total = 0;
-                            if (row.c[qtyIdx] && row.c[qtyIdx].v !== null) {
-                                const parsed = parseInt(row.c[qtyIdx].v);
-                                if (!isNaN(parsed)) total = parsed;
-                            }
-
-                            // 處理照片網址
-                            const imgUrl = (rawImg.startsWith('http')) ? rawImg : 'https://images.unsplash.com/photo-1468495244123-6c6c332eeece?w=600';
-
-                            // 🌟 核心對應扣除邏輯
-                            let totalRented = 0;
-
-                            // 模式 1：表單直接填寫完整編號（如 VT-001）
-                            if (id && rentCounts[id]) totalRented += rentCounts[id];
-                            
-                            // 模式 2：表單直接填寫完整名稱（如 筆記型電腦）
-                            if (name && rentCounts[name]) totalRented += rentCounts[name];
-
-                            // 模式 3：智慧數字對接（將 VT-001 提取成純數字字串 "001" 與整數字串 "1" 進行比對）
-                            if (id) {
-                                const pureNumStr = id.replace(/[^0-9]/g, ''); // 得到 "001"
-                                if (pureNumStr) {
-                                    if (rentCounts[pureNumStr]) totalRented += rentCounts[pureNumStr];
-                                    
-                                    const pureNumIntStr = String(parseInt(pureNumStr, 10)); // 得到 "1"
-                                    if (pureNumIntStr !== pureNumStr && rentCounts[pureNumIntStr]) {
-                                        totalRented += rentCounts[pureNumIntStr];
-                                    }
-                                }
-                            }
-
-                            // 模式 4：核心名稱關鍵字比對
-                            const coreName = name.split('(')[0].split('（')[0].trim();
-                            if (coreName && coreName !== name && rentCounts[coreName]) totalRented += rentCounts[coreName];
-
-                            // 計算最終剩餘數量
-                            const remaining = Math.max(0, total - totalRented);
-
-                            return {
-                                id: id || 'VT',
-                                name: name,
-                                category: category,
-                                desc: desc,
-                                location: location,
-                                img: imgUrl,
-                                form: formUrlField,
-                                total: total,
-                                remaining: remaining
-                            };
-                        }).filter(e => e !== null);
-
-                        // 自動產生分類
-                        const cats = new Set(['全部']);
-                        equipments.value.forEach(e => { if (e.category) cats.add(e.category.trim()); });
-                        categories.value = Array.from(cats);
-
-                    } catch (error) {
-                        console.error("即時同步失敗", error);
-                    } finally {
-                        loading.value = false;
-                    }
-                };
-
-                const filteredEquipments = computed(() => {
-                    return equipments.value.filter(item => {
-                        const matchesSearch = !searchQuery.value || item.name.toLowerCase().includes(searchQuery.value.toLowerCase());
-                        const matchesCategory = currentCategory.value === '全部' || item.category === currentCategory.value;
-                        return matchesSearch && matchesCategory;
-                    });
-                });
-
-                const openModal = (item) => { selectedItem.value = item; };
-
-                onMounted(loadData);
-
-                return { equipments, filteredEquipments, loading, searchQuery, currentCategory, categories, selectedItem, openModal };
-            }
-        }).mount('#app');
-    </script>
-</body>
-</html>
+            return {
+                name: name,
+                total: total,
+                remaining: Math.max(0, total - rentedCount),
+                // ... 其他屬性
+            };
+        });
+    } catch (e) {
+        console.error("載入失敗", e);
+    }
+};
