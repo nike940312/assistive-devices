@@ -133,27 +133,18 @@
 
                 const loadData = async () => {
                     try {
-                        // 1. 讀取表單回應次數
-                        let rentCounts = {};
+                        // 1. 抓取表單回應紀錄
+                        let rawFormRows = [];
                         try {
                             const resForm = await fetch(formUrl);
                             const textForm = await resForm.text();
                             const jsonForm = JSON.parse(textForm.substring(textForm.indexOf('{'), textForm.lastIndexOf('}') + 1));
                             
                             if (jsonForm.table && jsonForm.table.rows) {
-                                jsonForm.table.rows.forEach((row, rowIndex) => {
-                                    if (rowIndex === 0 || !row || !row.c) return;
-                                    row.c.forEach(cell => {
-                                        if (cell && cell.v !== null && cell.v !== undefined) {
-                                            const val = String(cell.v).trim();
-                                            if (val) {
-                                                rentCounts[val] = (rentCounts[val] || 0) + 1;
-                                            }
-                                        }
-                                    });
-                                });
+                                // 排除第一列標題，保留真實回應資料
+                                rawFormRows = jsonForm.table.rows.slice(1); 
                             }
-                        } catch (e) { console.log("表單暫無資料", e); }
+                        } catch (e) { console.log("表單目前讀取無資料", e); }
 
                         // 2. 讀取輔具清單主表
                         const resList = await fetch(listUrl);
@@ -163,7 +154,7 @@
                         const rows = jsonList.table.rows;
                         const cols = jsonList.table.cols;
 
-                        // 🌟 核心修正：動態掃描「數量」到底在第幾個欄位，避免 API 欄位代稱錯配
+                        // 掃描「數量」在第幾個欄位
                         let quantityColIndex = -1;
                         cols.forEach((col, idx) => {
                             if (col.label && col.label.trim().includes('數量')) {
@@ -184,13 +175,12 @@
                             const id = item['輔具編號'] || item['編號'] || '';
                             if (!name) return null;
                             
-                            // 🌟 精準抓取數量欄位數字
+                            // 抓取總數量數字
                             let total = 0;
                             if (quantityColIndex !== -1 && row.c[quantityColIndex] && row.c[quantityColIndex].v !== null) {
                                 const parsed = parseInt(row.c[quantityColIndex].v);
                                 if (!isNaN(parsed)) total = parsed;
                             } else {
-                                // 備用方案：如果欄位結構變動，進行全域關鍵字巡檢
                                 Object.keys(item).forEach(key => {
                                     if (key.includes('數量')) {
                                         const parsed = parseInt(item[key]);
@@ -204,14 +194,47 @@
                             const imgUrl = (rawImg.startsWith('http')) ? rawImg : 'https://images.unsplash.com/photo-1468495244123-6c6c332eeece?w=600';
                             const formUrlField = item['預約表單'] || item['Google表單'] || 'https://forms.google.com';
 
-                            // 計算扣掉的數量
-                            const rentedByName = rentCounts[name] || 0;
-                            const rentedById = rentCounts[id] || 0;
-                            const pureNum = id.replace(/[^0-9]/g, '');
-                            const rentedByNum = (pureNum && rentCounts[pureNum]) ? rentCounts[pureNum] : 0;
+                            // 🌟 核心修正：精準計算每種輔具在表單中被提及的有效次數
+                            let rentedCount = 0;
+                            
+                            // 只擷取名稱核心關鍵字，避免因為括號 (華碩)、(宏碁) 導致對不上
+                            const coreName = name.split('(')[0].split('（')[0].trim();
 
-                            const totalRented = rentedByName + rentedById + rentedByNum;
-                            const remaining = Math.max(0, total - totalRented);
+                            rawFormRows.forEach(formRow => {
+                                if (!formRow || !formRow.c) return;
+                                
+                                let isThisItemRentedInRow = false;
+                                
+                                formRow.c.forEach((cell, cellIdx) => {
+                                    // 跳過第一欄（填寫時間欄），避免時間格式的數字干擾編號比對
+                                    if (cellIdx === 0) return; 
+                                    
+                                    if (cell && cell.v !== null && cell.v !== undefined) {
+                                        const cellVal = String(cell.v).trim();
+                                        if (!cellVal) return;
+
+                                        // 條件 A：如果格子內容直接包含輔具的核心名稱（如：包含「筆記型電腦」）
+                                        // 條件 B：如果格子內容完全等於輔具編號（如：VT-001）
+                                        if (cellVal.includes(coreName) || (id && cellVal === id)) {
+                                            isThisItemRentedInRow = true;
+                                        }
+                                        
+                                        // 條件 C：如果學生只填了純數字編號（例如表單格子裡只有寫 "1"，且對應你的編號數字）
+                                        if (id) {
+                                            const pureIdNum = id.replace(/[^0-9]/g, '');
+                                            if (pureIdNum && cellVal === pureIdNum) {
+                                                isThisItemRentedInRow = true;
+                                            }
+                                        }
+                                    }
+                                });
+
+                                if (isThisItemRentedInRow) {
+                                    rentedCount++;
+                                }
+                            });
+
+                            const remaining = Math.max(0, total - rentedCount);
 
                             return {
                                 id: id || 'VT',
@@ -232,7 +255,7 @@
                         categories.value = Array.from(cats);
 
                     } catch (error) {
-                        console.error("同步失敗", error);
+                        console.error("即時同步失敗", error);
                     } finally {
                         loading.value = false;
                     }
