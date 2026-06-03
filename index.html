@@ -133,7 +133,7 @@
 
                 const loadData = async () => {
                     try {
-                        // 1. 抓取表單回應次數（最安全的掃描）
+                        // 1. 讀取表單回應次數
                         let rentCounts = {};
                         try {
                             const resForm = await fetch(formUrl);
@@ -153,9 +153,9 @@
                                     });
                                 });
                             }
-                        } catch (e) { console.log("表單讀取無資料", e); }
+                        } catch (e) { console.log("表單暫無資料", e); }
 
-                        // 2. 抓取輔具清單主表
+                        // 2. 讀取輔具清單主表
                         const resList = await fetch(listUrl);
                         const textList = await resList.text();
                         const jsonList = JSON.parse(textList.substring(textList.indexOf('{'), textList.lastIndexOf('}') + 1));
@@ -163,8 +163,17 @@
                         const rows = jsonList.table.rows;
                         const cols = jsonList.table.cols;
 
+                        // 🌟 核心修正：動態掃描「數量」到底在第幾個欄位，避免 API 欄位代稱錯配
+                        let quantityColIndex = -1;
+                        cols.forEach((col, idx) => {
+                            if (col.label && col.label.trim().includes('數量')) {
+                                quantityColIndex = idx;
+                            }
+                        });
+
                         equipments.value = rows.map(row => {
                             if (!row || !row.c) return null;
+                            
                             let item = {};
                             row.c.forEach((cell, i) => {
                                 const label = cols[i] && cols[i].label ? cols[i].label.trim() : `col_${i}`;
@@ -172,33 +181,43 @@
                             });
 
                             const name = item['輔具名稱'] || '';
+                            const id = item['輔具編號'] || item['編號'] || '';
                             if (!name) return null;
                             
-                            // 修正總數量邏輯：既然你後面有數量，網頁會先找「數量」欄位，若找不到一律安全設定為 8
-                            let total = 8;
-                            Object.keys(item).forEach(key => {
-                                if (key.includes('數量')) {
-                                    const parsed = parseInt(item[key]);
-                                    if (!isNaN(parsed) && parsed > 0) total = parsed;
-                                }
-                            });
+                            // 🌟 精準抓取數量欄位數字
+                            let total = 0;
+                            if (quantityColIndex !== -1 && row.c[quantityColIndex] && row.c[quantityColIndex].v !== null) {
+                                const parsed = parseInt(row.c[quantityColIndex].v);
+                                if (!isNaN(parsed)) total = parsed;
+                            } else {
+                                // 備用方案：如果欄位結構變動，進行全域關鍵字巡檢
+                                Object.keys(item).forEach(key => {
+                                    if (key.includes('數量')) {
+                                        const parsed = parseInt(item[key]);
+                                        if (!isNaN(parsed)) total = parsed;
+                                    }
+                                });
+                            }
 
-                            // 抓取照片網址
+                            // 照片與表單網址
                             const rawImg = item['輔具照片'] || item['照片'] || '';
                             const imgUrl = (rawImg.startsWith('http')) ? rawImg : 'https://images.unsplash.com/photo-1468495244123-6c6c332eeece?w=600';
-
-                            // 表單網址
                             const formUrlField = item['預約表單'] || item['Google表單'] || 'https://forms.google.com';
 
-                            // 核心修正減法：只有在表單回應完全對到「輔具名稱」才扣，沒被填過的就是 0，絕對不亂扣！
-                            const rented = rentCounts[name] || 0;
-                            const remaining = Math.max(0, total - rented);
+                            // 計算扣掉的數量
+                            const rentedByName = rentCounts[name] || 0;
+                            const rentedById = rentCounts[id] || 0;
+                            const pureNum = id.replace(/[^0-9]/g, '');
+                            const rentedByNum = (pureNum && rentCounts[pureNum]) ? rentCounts[pureNum] : 0;
+
+                            const totalRented = rentedByName + rentedById + rentedByNum;
+                            const remaining = Math.max(0, total - totalRented);
 
                             return {
-                                id: item['輔具編號'] || item['編號'] || 'VT',
+                                id: id || 'VT',
                                 name: name,
-                                category: item['分類'] || '未分類',
-                                desc: item['功能簡介'] || '暫無描述。',
+                                category: item['分類'] || '學習輔具',
+                                desc: item['功能簡介'] || '暫無功能描述。',
                                 location: item['保管位置'] || '資源教室',
                                 img: imgUrl,
                                 form: formUrlField,
@@ -213,7 +232,7 @@
                         categories.value = Array.from(cats);
 
                     } catch (error) {
-                        console.error("主要資料載入失敗", error);
+                        console.error("同步失敗", error);
                     } finally {
                         loading.value = false;
                     }
