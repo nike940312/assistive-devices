@@ -203,26 +203,26 @@
                         equipments.value.forEach(e => { if (e.分類) cats.add(e.分類.trim()); });
                         categories.value = Array.from(cats);
 
-                        // 2. 讀取表單回應（改用盲掃機制，杜絕幽靈欄位扣數）
+                        // 2. 讀取表單回應（升級：自動略過第一行欄位標題，杜絕幽靈扣減）
                         try {
                             const resForm = await fetch(formUrl);
                             const textForm = await resForm.text();
                             const jsonForm = JSON.parse(textForm.substring(textForm.indexOf('{'), textForm.lastIndexOf('}') + 1));
                             
                             const counts = {};
-                            // 先行幫清單中所有合法的輔具名稱初始化為 0 
+                            // 初始化所有輔具為 0 份借出
                             equipments.value.forEach(e => { counts[e.輔具名稱.trim()] = 0; });
 
-                            // 🔍 全螢幕盲掃：不對特定欄位，只找整張表有沒有出現對應的輔具名稱
                             if (jsonForm.table && jsonForm.table.rows && jsonForm.table.rows.length > 0) {
-                                jsonForm.table.rows.forEach(row => {
-                                    if (!row || !row.c) return;
+                                // 💡 關鍵修正：使用 rowIndex 確保跳過第 0 行標題，只掃描第 1 行以後的內容
+                                jsonForm.table.rows.forEach((row, rowIndex) => {
+                                    if (rowIndex === 0 || !row || !row.c) return; // 🌟 強制封鎖並跳過第 0 行
+                                    
                                     row.c.forEach(cell => {
                                         if (cell && cell.v) {
                                             const cellValue = String(cell.v).trim();
-                                            // 如果格子的內容正好符合我們主清單中的某一項輔具名稱，才算借出
                                             if (counts[cellValue] !== undefined) {
-                                                counts[cellValue]++;
+                                                counts[cellValue]++; // 只有真正的學生填寫列才會被加進計數
                                             }
                                         }
                                     });
@@ -231,12 +231,12 @@
                             
                             orderCountMap.value = counts;
                         } catch (err) {
-                            console.warn('表單回應完全為空，庫存計數已全部安全重置:', err);
+                            console.warn('表單資料為空，重置計數:', err);
                             orderCountMap.value = {};
                         }
 
                     } catch (error) {
-                        console.error('資料同步發生異常:', error);
+                        console.error('連線異常:', error);
                     } finally {
                         loading.value = false;
                     }
