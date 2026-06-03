@@ -40,7 +40,7 @@
                 <p class="text-sm text-gray-500 tracking-widest">正在即時同步雲端庫存與借閱紀錄...</p>
             </div>
 
-            <div v-else-if="filteredEquipments.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div v-for="item in filteredEquipments" :key="item.name" 
                      class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all border border-gray-100 flex flex-col group">
                     <div class="relative aspect-[4/3] bg-gray-100 overflow-hidden">
@@ -111,7 +111,7 @@
         </div>
 
         <footer class="bg-white border-t border-gray-100 py-6 text-center text-xs text-gray-400 tracking-wider">
-            &copy; 2026 大專校院資源教室. All Obligation.
+            &copy; 2026 大專校院資源教室. All Rights Reserved.
         </footer>
     </div>
 
@@ -133,7 +133,7 @@
 
                 const loadData = async () => {
                     try {
-                        // 1. 抓取表單回應次數
+                        // 1. 抓取表單回應次數（最安全的掃描）
                         let rentCounts = {};
                         try {
                             const resForm = await fetch(formUrl);
@@ -144,9 +144,96 @@
                                 jsonForm.table.rows.forEach((row, rowIndex) => {
                                     if (rowIndex === 0 || !row || !row.c) return;
                                     row.c.forEach(cell => {
-                                        if (cell && cell.v) {
+                                        if (cell && cell.v !== null && cell.v !== undefined) {
                                             const val = String(cell.v).trim();
                                             if (val) {
                                                 rentCounts[val] = (rentCounts[val] || 0) + 1;
                                             }
                                         }
+                                    });
+                                });
+                            }
+                        } catch (e) { console.log("表單讀取無資料", e); }
+
+                        // 2. 抓取輔具清單主表
+                        const resList = await fetch(listUrl);
+                        const textList = await resList.text();
+                        const jsonList = JSON.parse(textList.substring(textList.indexOf('{'), textList.lastIndexOf('}') + 1));
+                        
+                        const rows = jsonList.table.rows;
+                        const cols = jsonList.table.cols;
+
+                        equipments.value = rows.map(row => {
+                            if (!row || !row.c) return null;
+                            let item = {};
+                            row.c.forEach((cell, i) => {
+                                const label = cols[i] && cols[i].label ? cols[i].label.trim() : `col_${i}`;
+                                item[label] = cell && cell.v !== null ? String(cell.v).trim() : '';
+                            });
+
+                            const name = item['輔具名稱'] || '';
+                            if (!name) return null;
+                            
+                            // 修正總數量邏輯：既然你後面有數量，網頁會先找「數量」欄位，若找不到一律安全設定為 8
+                            let total = 8;
+                            Object.keys(item).forEach(key => {
+                                if (key.includes('數量')) {
+                                    const parsed = parseInt(item[key]);
+                                    if (!isNaN(parsed) && parsed > 0) total = parsed;
+                                }
+                            });
+
+                            // 抓取照片網址
+                            const rawImg = item['輔具照片'] || item['照片'] || '';
+                            const imgUrl = (rawImg.startsWith('http')) ? rawImg : 'https://images.unsplash.com/photo-1468495244123-6c6c332eeece?w=600';
+
+                            // 表單網址
+                            const formUrlField = item['預約表單'] || item['Google表單'] || 'https://forms.google.com';
+
+                            // 核心修正減法：只有在表單回應完全對到「輔具名稱」才扣，沒被填過的就是 0，絕對不亂扣！
+                            const rented = rentCounts[name] || 0;
+                            const remaining = Math.max(0, total - rented);
+
+                            return {
+                                id: item['輔具編號'] || item['編號'] || 'VT',
+                                name: name,
+                                category: item['分類'] || '未分類',
+                                desc: item['功能簡介'] || '暫無描述。',
+                                location: item['保管位置'] || '資源教室',
+                                img: imgUrl,
+                                form: formUrlField,
+                                total: total,
+                                remaining: remaining
+                            };
+                        }).filter(e => e !== null);
+
+                        // 自動產生分類
+                        const cats = new Set(['全部']);
+                        equipments.value.forEach(e => { if (e.category) cats.add(e.category.trim()); });
+                        categories.value = Array.from(cats);
+
+                    } catch (error) {
+                        console.error("主要資料載入失敗", error);
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const filteredEquipments = computed(() => {
+                    return equipments.value.filter(item => {
+                        const matchesSearch = !searchQuery.value || item.name.toLowerCase().includes(searchQuery.value.toLowerCase());
+                        const matchesCategory = currentCategory.value === '全部' || item.category === currentCategory.value;
+                        return matchesSearch && matchesCategory;
+                    });
+                });
+
+                const openModal = (item) => { selectedItem.value = item; };
+
+                onMounted(loadData);
+
+                return { equipments, filteredEquipments, loading, searchQuery, currentCategory, categories, selectedItem, openModal };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
