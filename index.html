@@ -133,18 +133,38 @@
 
                 const loadData = async () => {
                     try {
-                        // 1. 抓取表單回應紀錄
-                        let rawFormRows = [];
+                        // 1. 讀取表單回應並精確計算各個輔具編號的借出次數
+                        let rentCounts = {};
                         try {
                             const resForm = await fetch(formUrl);
                             const textForm = await resForm.text();
                             const jsonForm = JSON.parse(textForm.substring(textForm.indexOf('{'), textForm.lastIndexOf('}') + 1));
                             
                             if (jsonForm.table && jsonForm.table.rows) {
-                                // 排除第一列標題，保留真實回應資料
-                                rawFormRows = jsonForm.table.rows.slice(1); 
+                                // 🌟 尋找「輔具編號」在表單回應工作表中的確切欄位索引
+                                let formTargetColIdx = -1;
+                                jsonForm.table.cols.forEach((col, idx) => {
+                                    const lbl = col.label ? col.label.trim() : '';
+                                    if (lbl.includes('編號') || lbl.includes('名稱') || lbl.includes('品名')) {
+                                        formTargetColIdx = idx;
+                                    }
+                                });
+                                // 如果沒對到標籤，預設為第 6 欄 (索引 5，即欄位 F)
+                                if (formTargetColIdx === -1) formTargetColIdx = 5;
+
+                                // 統計每種編號被填寫的次數
+                                jsonForm.table.rows.forEach((row, rowIndex) => {
+                                    if (rowIndex === 0 || !row || !row.c) return; // 跳過標題列
+                                    const cell = row.c[formTargetColIdx];
+                                    if (cell && cell.v !== null && cell.v !== undefined) {
+                                        const val = String(cell.v).trim();
+                                        if (val) {
+                                            rentCounts[val] = (rentCounts[val] || 0) + 1;
+                                        }
+                                    }
+                                });
                             }
-                        } catch (e) { console.log("表單目前讀取無資料", e); }
+                        } catch (e) { console.log("目前表單無資料或連線異常", e); }
 
                         // 2. 讀取輔具清單主表
                         const resList = await fetch(listUrl);
@@ -154,94 +174,84 @@
                         const rows = jsonList.table.rows;
                         const cols = jsonList.table.cols;
 
-                        // 掃描「數量」在第幾個欄位
-                        let quantityColIndex = -1;
-                        cols.forEach((col, idx) => {
-                            if (col.label && col.label.trim().includes('數量')) {
-                                quantityColIndex = idx;
-                            }
-                        });
+                        // 🌟 動態掃描主表的欄位位置，徹底防止欄位錯位問題
+                        let idIdx = cols.findIndex(c => c.label && c.label.trim().includes('編號'));
+                        let catIdx = cols.findIndex(c => c.label && c.label.trim().includes('分類'));
+                        let nameIdx = cols.findIndex(c => c.label && c.label.trim().includes('名稱'));
+                        let descIdx = cols.findIndex(c => c.label && (c.label.trim().includes('功能') || c.label.trim().includes('簡介')));
+                        let qtyIdx = cols.findIndex(c => c.label && c.label.trim().includes('數量'));
+                        let locIdx = cols.findIndex(c => c.label && c.label.trim().includes('位置'));
+                        let imgIdx = cols.findIndex(c => c.label && c.label.trim().includes('照片'));
+                        let formIdx = cols.findIndex(c => c.label && c.label.trim().includes('表單'));
+
+                        // 嚴格保底索引（若對不到標籤則採用標準發布順序）
+                        if (idIdx === -1) idIdx = 0;
+                        if (catIdx === -1) catIdx = 1;
+                        if (nameIdx === -1) nameIdx = 2;
+                        if (descIdx === -1) descIdx = 3;
+                        if (qtyIdx === -1) qtyIdx = 4;
+                        if (locIdx === -1) locIdx = 5;
+                        if (imgIdx === -1) imgIdx = 6;
+                        if (formIdx === -1) formIdx = 7;
 
                         equipments.value = rows.map(row => {
                             if (!row || !row.c) return null;
                             
-                            let item = {};
-                            row.c.forEach((cell, i) => {
-                                const label = cols[i] && cols[i].label ? cols[i].label.trim() : `col_${i}`;
-                                item[label] = cell && cell.v !== null ? String(cell.v).trim() : '';
-                            });
-
-                            const name = item['輔具名稱'] || '';
-                            const id = item['輔具編號'] || item['編號'] || '';
+                            const id = row.c[idIdx] && row.c[idIdx].v !== null ? String(row.c[idIdx].v).trim() : '';
+                            const name = row.c[nameIdx] && row.c[nameIdx].v !== null ? String(row.c[nameIdx].v).trim() : '';
                             if (!name) return null;
-                            
-                            // 抓取總數量數字
+
+                            const category = row.c[catIdx] && row.c[catIdx].v !== null ? String(row.c[catIdx].v).trim() : '學習輔具';
+                            const desc = row.c[descIdx] && row.c[descIdx].v !== null ? String(row.c[descIdx].v).trim() : '暫無功能描述。';
+                            const location = row.c[locIdx] && row.c[locIdx].v !== null ? String(row.c[locIdx].v).trim() : '資源教室';
+                            const rawImg = row.c[imgIdx] && row.c[imgIdx].v !== null ? String(row.c[imgIdx].v).trim() : '';
+                            const formUrlField = row.c[formIdx] && row.c[formIdx].v !== null ? String(row.c[formIdx].v).trim() : 'https://forms.google.com';
+
+                            // 提取總數量
                             let total = 0;
-                            if (quantityColIndex !== -1 && row.c[quantityColIndex] && row.c[quantityColIndex].v !== null) {
-                                const parsed = parseInt(row.c[quantityColIndex].v);
+                            if (row.c[qtyIdx] && row.c[qtyIdx].v !== null) {
+                                const parsed = parseInt(row.c[qtyIdx].v);
                                 if (!isNaN(parsed)) total = parsed;
-                            } else {
-                                Object.keys(item).forEach(key => {
-                                    if (key.includes('數量')) {
-                                        const parsed = parseInt(item[key]);
-                                        if (!isNaN(parsed)) total = parsed;
-                                    }
-                                });
                             }
 
-                            // 照片與表單網址
-                            const rawImg = item['輔具照片'] || item['照片'] || '';
+                            // 處理照片網址
                             const imgUrl = (rawImg.startsWith('http')) ? rawImg : 'https://images.unsplash.com/photo-1468495244123-6c6c332eeece?w=600';
-                            const formUrlField = item['預約表單'] || item['Google表單'] || 'https://forms.google.com';
 
-                            // 🌟 核心修正：精準計算每種輔具在表單中被提及的有效次數
-                            let rentedCount = 0;
+                            // 🌟 核心對應扣除邏輯
+                            let totalRented = 0;
+
+                            // 模式 1：表單直接填寫完整編號（如 VT-001）
+                            if (id && rentCounts[id]) totalRented += rentCounts[id];
                             
-                            // 只擷取名稱核心關鍵字，避免因為括號 (華碩)、(宏碁) 導致對不上
-                            const coreName = name.split('(')[0].split('（')[0].trim();
+                            // 模式 2：表單直接填寫完整名稱（如 筆記型電腦）
+                            if (name && rentCounts[name]) totalRented += rentCounts[name];
 
-                            rawFormRows.forEach(formRow => {
-                                if (!formRow || !formRow.c) return;
-                                
-                                let isThisItemRentedInRow = false;
-                                
-                                formRow.c.forEach((cell, cellIdx) => {
-                                    // 跳過第一欄（填寫時間欄），避免時間格式的數字干擾編號比對
-                                    if (cellIdx === 0) return; 
+                            // 模式 3：智慧數字對接（將 VT-001 提取成純數字字串 "001" 與整數字串 "1" 進行比對）
+                            if (id) {
+                                const pureNumStr = id.replace(/[^0-9]/g, ''); // 得到 "001"
+                                if (pureNumStr) {
+                                    if (rentCounts[pureNumStr]) totalRented += rentCounts[pureNumStr];
                                     
-                                    if (cell && cell.v !== null && cell.v !== undefined) {
-                                        const cellVal = String(cell.v).trim();
-                                        if (!cellVal) return;
-
-                                        // 條件 A：如果格子內容直接包含輔具的核心名稱（如：包含「筆記型電腦」）
-                                        // 條件 B：如果格子內容完全等於輔具編號（如：VT-001）
-                                        if (cellVal.includes(coreName) || (id && cellVal === id)) {
-                                            isThisItemRentedInRow = true;
-                                        }
-                                        
-                                        // 條件 C：如果學生只填了純數字編號（例如表單格子裡只有寫 "1"，且對應你的編號數字）
-                                        if (id) {
-                                            const pureIdNum = id.replace(/[^0-9]/g, '');
-                                            if (pureIdNum && cellVal === pureIdNum) {
-                                                isThisItemRentedInRow = true;
-                                            }
-                                        }
+                                    const pureNumIntStr = String(parseInt(pureNumStr, 10)); // 得到 "1"
+                                    if (pureNumIntStr !== pureNumStr && rentCounts[pureNumIntStr]) {
+                                        totalRented += rentCounts[pureNumIntStr];
                                     }
-                                });
-
-                                if (isThisItemRentedInRow) {
-                                    rentedCount++;
                                 }
-                            });
+                            }
 
-                            const remaining = Math.max(0, total - rentedCount);
+                            // 模式 4：核心名稱關鍵字比對
+                            const coreName = name.split('(')[0].split('（')[0].trim();
+                            if (coreName && coreName !== name && rentCounts[coreName]) totalRented += rentCounts[coreName];
+
+                            // 計算最終剩餘數量
+                            const remaining = Math.max(0, total - totalRented);
 
                             return {
                                 id: id || 'VT',
                                 name: name,
-                                category: item['分類'] || '學習輔具',
-                                desc: item['功能簡介'] || '暫無功能描述。',
-                                location: item['保管位置'] || '資源教室',
+                                category: category,
+                                desc: desc,
+                                location: location,
                                 img: imgUrl,
                                 form: formUrlField,
                                 total: total,
