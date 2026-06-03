@@ -6,7 +6,9 @@
     <title>大專資源教室 - 學習輔具線上清單</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <style>[v-cloak] { display: none !important; }</style>
+    <style>
+        [v-cloak] { display: none !important; }
+    </style>
 </head>
 <body class="bg-[#F9F6F0] text-gray-800 font-sans m-0 p-0">
 
@@ -19,40 +21,98 @@
                 </div>
                 <div class="w-full sm:w-72">
                     <input type="text" v-model="searchQuery" placeholder="搜尋輔具名稱..." 
-                           class="w-full px-4 py-2 rounded-full bg-gray-100 text-sm border-0 focus:ring-2 focus:ring-[#2C4A3E] focus:bg-white">
+                           class="w-full px-4 py-2 rounded-full bg-gray-100 text-sm border-0 focus:ring-2 focus:ring-[#2C4A3E] focus:bg-white transition-all">
                 </div>
             </div>
         </header>
 
         <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-8">
-            <div v-if="loading" class="text-center py-20">
-                <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-300 border-t-[#2C4A3E] mb-4"></div>
-                <p class="text-sm text-gray-500">正在同步雲端庫存...</p>
+            <div class="flex flex-wrap justify-center gap-2 mb-8">
+                <button v-for="cat in categories" :key="cat" @click="currentCategory = cat"
+                        :class="currentCategory === cat ? 'bg-[#2C4A3E] text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                        class="px-4 py-1.5 rounded-full text-xs font-medium transition-all shadow-sm border border-gray-100">
+                    {{ cat === '全部' ? 'ALL. 全部輔具' : cat }}
+                </button>
             </div>
 
-            <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div v-if="loading" class="text-center py-20">
+                <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-300 border-t-[#2C4A3E] mb-4"></div>
+                <p class="text-sm text-gray-500 tracking-widest">正在即時同步雲端庫存與借閱紀錄...</p>
+            </div>
+
+            <div v-else-if="filteredEquipments.length > 0" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div v-for="item in filteredEquipments" :key="item.name" 
-                     class="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100 flex flex-col justify-between p-5">
-                    <div>
-                        <div class="flex justify-between items-start mb-2">
-                            <span class="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">編號: {{ item.id }}</span>
-                            <span :class="item.remaining <= 0 ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'" class="text-[10px] px-2.5 py-1 rounded-full font-bold">
-                                剩餘 {{ item.remaining }} 台 / 總共 {{ item.total }} 台
-                            </span>
-                        </div>
-                        <h3 class="text-base font-bold text-gray-900 mb-2">{{ item.name }}</h3>
-                        <p class="text-xs text-gray-500 line-clamp-3 mb-4">{{ item.desc }}</p>
+                     class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all border border-gray-100 flex flex-col group">
+                    <div class="relative aspect-[4/3] bg-gray-100 overflow-hidden">
+                        <img :src="item.img" :alt="item.name" class="w-full h-full object-cover group-hover:scale-103 transition-transform duration-500">
+                        <span :class="item.remaining <= 0 ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'" 
+                              class="absolute top-3 right-3 text-[10px] px-2.5 py-1 rounded-full font-bold shadow-sm border">
+                            {{ item.remaining <= 0 ? '已借出' : `${item.remaining} 台` }}
+                        </span>
                     </div>
-                    <div class="pt-4 border-t border-gray-100 flex justify-between items-center">
-                        <span class="text-xs text-gray-400">位置: {{ item.location }}</span>
-                        <a :hover="item.remaining <= 0" :href="item.form" target="_blank" 
-                           class="bg-[#2C4A3E] text-white text-xs px-4 py-2 rounded-xl font-medium hover:bg-[#1E332B] transition-colors">
-                            線上預約
-                        </a>
+                    <div class="p-5 flex-1 flex flex-col justify-between">
+                        <div>
+                            <span class="text-[10px] text-gray-400 font-bold tracking-widest block mb-1 uppercase">
+                                {{ item.category }}
+                            </span>
+                            <h3 class="text-base font-bold text-gray-900 mb-2 line-clamp-1 group-hover:text-[#2C4A3E] transition-colors">
+                                {{ item.name }}
+                            </h3>
+                            <p class="text-xs text-gray-500 line-clamp-2 mb-4 leading-relaxed min-h-[2rem]">
+                                {{ item.desc }}
+                            </p>
+                        </div>
+                        <div class="pt-4 border-t border-gray-100 flex justify-between items-center text-xs text-gray-400">
+                            <span>位置：{{ item.location }}</span>
+                            <button @click="openModal(item)" class="text-[#2C4A3E] font-semibold hover:underline flex items-center gap-1">
+                                查看詳情 ➔
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
         </main>
+
+        <div v-if="selectedItem" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" @click.self="selectedItem = null">
+            <div class="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl relative">
+                <button @click="selectedItem = null" class="absolute top-4 right-4 bg-white/80 hover:bg-white text-gray-700 w-8 h-8 rounded-full flex items-center justify-center transition-all z-10">✕</button>
+
+                <div class="relative aspect-video bg-gray-100">
+                    <img :src="selectedItem.img" :alt="selectedItem.name" class="w-full h-full object-cover">
+                </div>
+
+                <div class="p-6">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="bg-gray-100 text-gray-600 text-[10px] px-2 py-0.5 rounded font-mono">編號：{{ selectedItem.id }}</span>
+                        <span class="text-xs text-gray-400">{{ selectedItem.category }}</span>
+                    </div>
+                    <h2 class="text-xl font-bold text-gray-900 mb-3">{{ selectedItem.name }}</h2>
+                    <p class="text-sm text-gray-600 leading-relaxed mb-4 whitespace-pre-line">{{ selectedItem.desc }}</p>
+                    
+                    <div class="bg-gray-50 p-4 rounded-xl text-xs text-gray-500 space-y-1.5 mb-6">
+                        <div><strong>存放位置：</strong> {{ selectedItem.location }}</div>
+                        <div>
+                            <strong>目前狀態：</strong> 
+                            <span :class="selectedItem.remaining <= 0 ? 'text-rose-600 font-bold' : 'text-green-600 font-bold'">
+                                {{ selectedItem.remaining <= 0 ? '已借出' : '可借用' }}
+                            </span>
+                        </div>
+                        <div>
+                            <strong>庫存概況：</strong> 剩餘 <span class="font-bold text-sm text-gray-800">{{ selectedItem.remaining }}</span> 台 / 總共 {{ selectedItem.total }} 台
+                        </div>
+                    </div>
+
+                    <a :href="selectedItem.form" target="_blank"
+                       class="block w-full text-center bg-[#2C4A3E] hover:bg-[#1E332B] text-white text-sm font-medium py-3 rounded-xl transition-all shadow-sm tracking-widest font-semibold">
+                        線上申請預約借用
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <footer class="bg-white border-t border-gray-100 py-6 text-center text-xs text-gray-400 tracking-wider">
+            &copy; 2026 大專校院資源教室. All Obligation.
+        </footer>
     </div>
 
     <script>
@@ -60,6 +120,7 @@
 
         createApp({
             setup() {
+                // 完美綁定你提供的 LIig 試算表 ID
                 const spreadsheetId = '1BXALU_DAFpErYY1FaEc9_at7DSOuS9HssbZ2B36LIig';
                 const listUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tq=select%20*&sheet=%E8%BC%94%E5%85%B7%E6%B8%85%E5%96%AE`;
                 const formUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tq=select%20*&sheet=%E8%A1%A8%E5%96%AE%E5%9B%9E%E6%87%89%201`;
@@ -67,10 +128,13 @@
                 const equipments = ref([]);
                 const loading = ref(true);
                 const searchQuery = ref('');
+                const currentCategory = ref('全部');
+                const categories = ref(['全部']);
+                const selectedItem = ref(null);
 
                 const loadData = async () => {
                     try {
-                        // 1. 抓取表單回應並精準計算被借了幾次
+                        // 1. 抓取表單回應，精確盲掃有幾次
                         let rentCounts = {};
                         try {
                             const resForm = await fetch(formUrl);
@@ -78,8 +142,8 @@
                             const jsonForm = JSON.parse(textForm.substring(textForm.indexOf('{'), textForm.lastIndexOf('}') + 1));
                             
                             if (jsonForm.table && jsonForm.table.rows) {
-                                jsonForm.table.rows.forEach(row => {
-                                    if (!row || !row.c) return;
+                                jsonForm.table.rows.forEach((row, rowIndex) => {
+                                    if (rowIndex === 0 || !row || !row.c) return; // 過濾標題列
                                     row.c.forEach(cell => {
                                         if (cell && cell.v) {
                                             const val = String(cell.v).trim();
@@ -107,11 +171,10 @@
                                 item[label] = cell && cell.v !== null ? String(cell.v).trim() : '';
                             });
 
-                            // 精準抓取欄位
                             const name = item['輔具名稱'] || '';
-                            let total = 8; // 如果抓不到數量，預設總數是 8
                             
-                            // 尋找試算表裡有沒有寫著「數量」的欄位
+                            // 智慧相容：如果試算表沒寫數量，預設防呆為 8 台
+                            let total = 8;
                             Object.keys(item).forEach(key => {
                                 if (key.includes('數量')) {
                                     const parsed = parseInt(item[key]);
@@ -119,35 +182,55 @@
                                 }
                             });
 
-                            // 精準計算剩餘：總數減掉被借用次數
+                            // 處理照片欄位（支援「照片」或「輔具照片」）
+                            const rawImg = item['照片'] || item['輔具照片'] || '';
+                            const imgUrl = (rawImg.startsWith('http')) ? rawImg : 'https://images.unsplash.com/photo-1468495244123-6c6c332eeece?w=600';
+
+                            // 處理表單欄位（支援「預約表單」或「Google表單」）
+                            const formUrlField = item['預約表單'] || item['Google表單'] || 'https://forms.google.com';
+
+                            // 精確計算庫存減法：沒出現過的輔具絕對是 0 次，不會亂扣！
                             const rented = rentCounts[name] || 0;
                             const remaining = Math.max(0, total - rented);
 
                             return {
-                                id: item['輔具編號'] || item['編號'] || 'VT',
+                                id: item['編號'] || item['輔具編號'] || 'VT',
                                 name: name,
-                                desc: item['功能簡介'] || '暫無描述。',
+                                category: item['分類'] || '學習輔具',
+                                desc: item['功能簡介'] || '暫無詳細功能描述。',
                                 location: item['保管位置'] || '資源教室',
-                                form: 'https://forms.google.com', // 預設表單連結
+                                img: imgUrl,
+                                form: formUrlField,
                                 total: total,
                                 remaining: remaining
                             };
                         }).filter(e => e.name !== '');
 
+                        // 自動產生分類標籤
+                        const cats = new Set(['全部']);
+                        equipments.value.forEach(e => { if (e.category) cats.add(e.category.trim()); });
+                        categories.value = Array.from(cats);
+
                     } catch (error) {
-                        console.error("資料加載失敗", error);
+                        console.error("資料同步異常", error);
                     } finally {
                         loading.value = false;
                     }
                 };
 
                 const filteredEquipments = computed(() => {
-                    if (!searchQuery.value) return equipments.value;
-                    return equipments.value.filter(e => e.name.toLowerCase().includes(searchQuery.value.toLowerCase()));
+                    return equipments.value.filter(item => {
+                        const matchesSearch = !searchQuery.value || item.name.toLowerCase().includes(searchQuery.value.toLowerCase());
+                        const matchesCategory = currentCategory.value === '全部' || item.category === currentCategory.value;
+                        return matchesSearch && matchesCategory;
+                    });
                 });
 
+                const openModal = (item) => { selectedItem.value = item; };
+
                 onMounted(loadData);
-                return { equipments, filteredEquipments, loading, searchQuery };
+
+                return { equipments, filteredEquipments, loading, searchQuery, currentCategory, categories, selectedItem, openModal };
             }
         }).mount('#app');
     </script>
